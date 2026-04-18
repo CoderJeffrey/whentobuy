@@ -1,0 +1,9 @@
+{
+  "weights": {
+    "rsi_oversold": "high",
+    "above_sma_200": "high",
+    "macd_bullish_cross": "medium",
+    "golden_cross": "medium",
+    "near_52w_low": "low"
+  }
+}
