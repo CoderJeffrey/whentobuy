@@ -14,7 +14,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen">
       <div className="max-w-6xl mx-auto px-6">
-        <NavBar asOf={data?.asOf} />
+        <NavBar />
 
         {isLoading && (
           <div
