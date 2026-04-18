@@ -7,9 +7,36 @@ export type Rating =
 
 export type Tier = "high" | "medium" | "low";
 
-export interface ScoreBreakdownItem {
-  id: "rsi_oversold" | "above_sma_200" | "macd_bullish_cross";
+export type IndicatorId =
+  | "rsi_oversold"
+  | "macd_bullish_cross"
+  | "macd_positive"
+  | "above_sma_200"
+  | "above_sma_50"
+  | "above_sma_20"
+  | "golden_cross"
+  | "near_52w_low"
+  | "bb_lower_touch"
+  | "volume_spike";
+
+export type IndicatorCategory =
+  | "momentum"
+  | "trend"
+  | "mean_reversion"
+  | "volume";
+
+export interface IndicatorMeta {
+  id: IndicatorId;
   label: string;
+  abbreviation: string;
+  category: IndicatorCategory;
+  description: string;
+}
+
+export interface ScoreBreakdownItem {
+  id: IndicatorId;
+  label: string;
+  abbreviation: string;
   tier: Tier;
   points: number;
   triggered: boolean;
@@ -21,6 +48,8 @@ export interface Score {
   max: number;
   percentage: number;
   rating: Rating;
+  triggeredCount: number;
+  totalCount: number;
   breakdown: ScoreBreakdownItem[];
 }
 
@@ -47,4 +76,10 @@ export interface DashboardResponse {
   score: Score;
   priceHistory: PriceBar[];
   sma200Series: SmaPoint[];
+}
+
+export type UserWeights = Partial<Record<IndicatorId, Tier>>;
+
+export interface UserConfig {
+  weights: UserWeights;
 }

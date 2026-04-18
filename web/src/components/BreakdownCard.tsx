@@ -1,7 +1,18 @@
-import type { Score } from "../types";
+import type { Score, Tier } from "../types";
 import { IndicatorRow } from "./IndicatorRow";
 
+const TIER_ORDER: Tier[] = ["high", "medium", "low"];
+
 export function BreakdownCard({ score }: { score: Score }) {
+  const byTier: Record<Tier, typeof score.breakdown> = {
+    high: [],
+    medium: [],
+    low: [],
+  };
+  for (const item of score.breakdown) byTier[item.tier].push(item);
+
+  const hasItems = score.breakdown.length > 0;
+
   return (
     <section
       className="rounded-2xl p-8"
@@ -10,26 +21,55 @@ export function BreakdownCard({ score }: { score: Score }) {
         border: "1px solid var(--border)",
       }}
     >
-      <h3 className="text-xl font-semibold mb-2">Why this rating?</h3>
+      <div className="flex items-baseline justify-between mb-2">
+        <h3 className="text-xl font-semibold">Why this rating?</h3>
+        <span
+          className="font-mono text-sm"
+          style={{ color: "var(--text-muted)" }}
+          data-testid="breakdown-counts"
+        >
+          {score.triggeredCount} / {score.totalCount} triggered
+        </span>
+      </div>
       <p
         className="text-sm mb-4"
         style={{ color: "var(--text-muted)" }}
       >
-        Three indicators, weighted by importance. Total score determines the
-        rating.
+        Indicators grouped by your tier weights. Adjust them on the{" "}
+        <a
+          href="/weights"
+          className="underline"
+          style={{ color: "var(--gold)" }}
+        >
+          Weights
+        </a>{" "}
+        page.
       </p>
 
-      <div className="divide-y" style={{ borderColor: "var(--border)" }}>
-        {score.breakdown.map((item) => (
-          <div
-            key={item.id}
-            style={{ borderTop: "1px solid var(--border)" }}
-            className="first:border-t-0"
-          >
-            <IndicatorRow item={item} />
+      {!hasItems && (
+        <div
+          className="py-8 text-center text-sm"
+          style={{ color: "var(--text-muted)" }}
+          data-testid="breakdown-empty"
+        >
+          No indicators configured. Add some on the Weights page.
+        </div>
+      )}
+
+      {hasItems &&
+        TIER_ORDER.filter((t) => byTier[t].length > 0).map((tier) => (
+          <div key={tier}>
+            {byTier[tier].map((item) => (
+              <div
+                key={item.id}
+                style={{ borderTop: "1px solid var(--border)" }}
+                className="first:border-t-0"
+              >
+                <IndicatorRow item={item} />
+              </div>
+            ))}
           </div>
         ))}
-      </div>
 
       <div
         className="flex items-center justify-between pt-5 mt-2"

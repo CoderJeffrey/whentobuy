@@ -1,12 +1,15 @@
 import "dotenv/config";
 import cors from "cors";
 import express from "express";
+import { ConfigError, loadConfig, saveConfig } from "./config.js";
 import { getDb } from "./db.js";
+import { INDICATOR_METADATA } from "./indicator-registry.js";
 import { scoreDashboard } from "./scoring.js";
 import type {
   DashboardResponse,
   IndicatorRow,
   PriceBar,
+  PriceRow,
   SmaPoint,
 } from "./types.js";
 
@@ -52,7 +55,7 @@ async function buildDashboard(): Promise<DashboardResponse> {
   }
 
   const indicatorReader = await db.runAndReadAll(
-    "SELECT date, rsi_14, sma_200, macd, macd_signal, macd_cross_up FROM indicators ORDER BY date ASC",
+    "SELECT date, rsi_14, sma_20, sma_50, sma_200, macd, macd_signal, macd_cross_up, bb_lower, pct_from_52w_low, volume_avg_20 FROM indicators ORDER BY date ASC",
   );
   const indicatorRows = indicatorReader.getRowObjectsJS();
 
@@ -68,10 +71,15 @@ async function buildDashboard(): Promise<DashboardResponse> {
   const indicators: IndicatorRow[] = indicatorRows.map((r) => ({
     date: toIsoDate(r.date),
     rsi_14: asNullableNumber(r.rsi_14),
+    sma_20: asNullableNumber(r.sma_20),
+    sma_50: asNullableNumber(r.sma_50),
     sma_200: asNullableNumber(r.sma_200),
     macd: asNullableNumber(r.macd),
     macd_signal: asNullableNumber(r.macd_signal),
     macd_cross_up: asNullableBoolean(r.macd_cross_up),
+    bb_lower: asNullableNumber(r.bb_lower),
+    pct_from_52w_low: asNullableNumber(r.pct_from_52w_low),
+    volume_avg_20: asNullableNumber(r.volume_avg_20),
   }));
 
   const latest = priceHistory[priceHistory.length - 1]!;
@@ -85,7 +93,22 @@ async function buildDashboard(): Promise<DashboardResponse> {
     .filter((r): r is IndicatorRow & { sma_200: number } => r.sma_200 != null)
     .map((r) => ({ date: r.date, value: r.sma_200 }));
 
-  const score = scoreDashboard(latest.close, latestIndicator, indicators);
+  const latestPriceRow: PriceRow = {
+    date: latest.date,
+    open: latest.open,
+    high: latest.high,
+    low: latest.low,
+    close: latest.close,
+    volume: latest.volume,
+  };
+
+  const { weights } = loadConfig();
+  const score = scoreDashboard(
+    latestPriceRow,
+    latestIndicator,
+    indicators,
+    weights,
+  );
 
   return {
     ticker: "AAPL",
@@ -101,6 +124,7 @@ async function buildDashboard(): Promise<DashboardResponse> {
 
 const app = express();
 app.use(cors({ origin: "http://localhost:5173" }));
+app.use(express.json());
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
@@ -114,6 +138,33 @@ app.get("/api/dashboard", async (_req, res) => {
     console.error("[/api/dashboard] error:", err);
     const message = err instanceof Error ? err.message : "internal error";
     res.status(500).json({ error: message });
+  }
+});
+
+app.get("/api/indicators", (_req, res) => {
+  res.json(INDICATOR_METADATA);
+});
+
+app.get("/api/config", (_req, res) => {
+  try {
+    res.json(loadConfig());
+  } catch (err) {
+    console.error("[/api/config GET] error:", err);
+    res.status(500).json({ error: "failed to load config" });
+  }
+});
+
+app.put("/api/config", (req, res) => {
+  try {
+    const saved = saveConfig(req.body);
+    res.json(saved);
+  } catch (err) {
+    if (err instanceof ConfigError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    console.error("[/api/config PUT] error:", err);
+    res.status(500).json({ error: "failed to save config" });
   }
 });
 

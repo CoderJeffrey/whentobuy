@@ -1,5 +1,5 @@
 import type { DashboardResponse } from "../types";
-import { RatingBadge } from "./RatingBadge";
+import { Gauge } from "./Gauge";
 
 export function ScoreCard({ data }: { data: DashboardResponse }) {
   const { ticker, currentPrice, priceChange, priceChangePct, score } = data;
@@ -7,7 +7,6 @@ export function ScoreCard({ data }: { data: DashboardResponse }) {
   const changeColor = changePositive
     ? "var(--rating-strong_buy)"
     : "var(--rating-immediate_sell)";
-  const ratingColor = `var(--rating-${score.rating})`;
 
   return (
     <section
@@ -50,44 +49,12 @@ export function ScoreCard({ data }: { data: DashboardResponse }) {
         </div>
       </div>
 
-      <RatingBadge rating={score.rating} />
-
-      <div className="flex flex-col items-center gap-3 w-full max-w-md">
-        <div className="flex items-baseline gap-2">
-          <span
-            className="font-mono text-2xl font-medium"
-            data-testid="score-total"
-          >
-            {score.total}
-          </span>
-          <span
-            className="font-mono text-xl"
-            style={{ color: "var(--text-muted)" }}
-          >
-            / {score.max}
-          </span>
-          <span
-            className="font-mono text-lg ml-2"
-            style={{ color: "var(--text-muted)" }}
-            data-testid="score-percentage"
-          >
-            ({score.percentage}%)
-          </span>
-        </div>
-        <div
-          className="w-full h-3 rounded-full overflow-hidden"
-          style={{ backgroundColor: "var(--bg-card-hover)" }}
-        >
-          <div
-            data-testid="score-bar"
-            className="h-full rounded-full transition-all"
-            style={{
-              width: `${score.percentage}%`,
-              backgroundColor: ratingColor,
-            }}
-          />
-        </div>
-      </div>
+      <Gauge
+        percentage={score.percentage}
+        rating={score.rating}
+        total={score.total}
+        max={score.max}
+      />
     </section>
   );
 }
