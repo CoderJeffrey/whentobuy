@@ -10,8 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@fontsource/inter": "^5.2.8",
-    "@fontsource/jetbrains-mono": "^5.2.8",
+    "@fontsource/ibm-plex-mono": "^5.2.7",
     "@tanstack/react-query": "^5.99.0",
     "lightweight-charts": "^5.1.0",
     "react": "^19.2.4",

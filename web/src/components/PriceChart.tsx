@@ -67,7 +67,7 @@ export function PriceChart({
       layout: {
         background: { color: "#141414" },
         textColor: "#9ca3af",
-        fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+        fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
       },
       grid: {
         vertLines: { color: "#1f1f1f" },

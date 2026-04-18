@@ -1,10 +1,8 @@
 @import "tailwindcss";
-@import "@fontsource/inter/400.css";
-@import "@fontsource/inter/500.css";
-@import "@fontsource/inter/600.css";
-@import "@fontsource/inter/700.css";
-@import "@fontsource/jetbrains-mono/400.css";
-@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/ibm-plex-mono/600.css";
+@import "@fontsource/ibm-plex-mono/700.css";
 
 :root {
   color-scheme: dark;
@@ -38,18 +36,18 @@ body {
   background-color: var(--bg-page);
   color: var(--text-primary);
   font-family:
-    "Inter",
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    sans-serif;
+    "IBM Plex Mono",
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
   -webkit-font-smoothing: antialiased;
   margin: 0;
 }
 
 .font-mono {
   font-family:
-    "JetBrains Mono",
+    "IBM Plex Mono",
     ui-monospace,
     SFMono-Regular,
     Menlo,
