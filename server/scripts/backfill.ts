@@ -1,7 +1,7 @@
 import "dotenv/config";
 import YahooFinance from "yahoo-finance2";
 import type { ChartResultArray } from "yahoo-finance2/modules/chart";
-import { closeDb, getDb } from "../src/db.js";
+import { closeDb, getDb, recreateIndicatorsTable } from "../src/db.js";
 import { computeIndicators } from "../src/indicators.js";
 
 const TICKER = "AAPL";
@@ -14,6 +14,10 @@ function isoDate(d: Date): string {
 
 function sqlLit(s: string): string {
   return `'${s.replace(/'/g, "''")}'`;
+}
+
+function num(v: number | null | undefined): string {
+  return v == null ? "NULL" : String(v);
 }
 
 async function main() {
@@ -54,8 +58,8 @@ async function main() {
 
   const db = await getDb();
 
-  await db.run("DELETE FROM indicators");
   await db.run("DELETE FROM prices");
+  await recreateIndicatorsTable(db);
 
   const priceValuesSql = quotes
     .map((q) => {
@@ -72,32 +76,38 @@ async function main() {
   console.log(`[backfill] inserted ${quotes.length} price rows`);
 
   const closes = quotes.map((q) => q.close as number);
-  const { rsi14, sma200, macd, macdSignal, macdCrossUp } =
-    computeIndicators(closes);
+  const volumes = quotes.map((q) => q.volume as number);
+  const ind = computeIndicators(closes, volumes);
 
   const indicatorValuesSql = quotes
     .map((q, i) => {
       const d = sqlLit(isoDate(q.date));
-      const rsi = rsi14[i] == null ? "NULL" : String(rsi14[i]);
-      const sma = sma200[i] == null ? "NULL" : String(sma200[i]);
-      const m = macd[i] == null ? "NULL" : String(macd[i]);
-      const s = macdSignal[i] == null ? "NULL" : String(macdSignal[i]);
-      const x = macdCrossUp[i] == null ? "NULL" : String(macdCrossUp[i]);
-      return `(${d}, ${rsi}, ${sma}, ${m}, ${s}, ${x})`;
+      const cols = [
+        num(ind.rsi14[i]),
+        num(ind.sma20[i]),
+        num(ind.sma50[i]),
+        num(ind.sma200[i]),
+        num(ind.macd[i]),
+        num(ind.macdSignal[i]),
+        ind.macdCrossUp[i] == null ? "NULL" : String(ind.macdCrossUp[i]),
+        num(ind.bbLower[i]),
+        num(ind.pctFrom52wLow[i]),
+        num(ind.volumeAvg20[i]),
+      ];
+      return `(${d}, ${cols.join(", ")})`;
     })
     .join(",\n");
 
   await db.run(
-    `INSERT INTO indicators (date, rsi_14, sma_200, macd, macd_signal, macd_cross_up) VALUES\n${indicatorValuesSql}`,
+    `INSERT INTO indicators (date, rsi_14, sma_20, sma_50, sma_200, macd, macd_signal, macd_cross_up, bb_lower, pct_from_52w_low, volume_avg_20) VALUES\n${indicatorValuesSql}`,
   );
 
   console.log(`[backfill] inserted ${quotes.length} indicator rows`);
 
-  const lastQuote = quotes[quotes.length - 1]!;
-  const lastRsi = rsi14[rsi14.length - 1];
-  const lastSma = sma200[sma200.length - 1];
+  const lastIdx = quotes.length - 1;
+  const lastQuote = quotes[lastIdx]!;
   console.log(
-    `[backfill] latest: ${isoDate(lastQuote.date)} close=${lastQuote.close} RSI-14=${lastRsi?.toFixed(2) ?? "n/a"} SMA-200=${lastSma?.toFixed(2) ?? "n/a"}`,
+    `[backfill] latest: ${isoDate(lastQuote.date)} close=${lastQuote.close} RSI=${ind.rsi14[lastIdx]?.toFixed(2) ?? "n/a"} SMA200=${ind.sma200[lastIdx]?.toFixed(2) ?? "n/a"} SMA50=${ind.sma50[lastIdx]?.toFixed(2) ?? "n/a"} SMA20=${ind.sma20[lastIdx]?.toFixed(2) ?? "n/a"}`,
   );
 
   await closeDb();

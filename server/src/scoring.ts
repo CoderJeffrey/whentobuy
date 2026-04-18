@@ -1,9 +1,18 @@
-import type { IndicatorRow, Rating, Score, ScoreBreakdownItem } from "./types.js";
+import { INDICATOR_REGISTRY } from "./indicator-registry.js";
+import type {
+  IndicatorId,
+  IndicatorRow,
+  PriceRow,
+  Rating,
+  Score,
+  ScoreBreakdownItem,
+  Tier,
+  UserWeights,
+} from "./types.js";
 
-const POINTS_RSI = 10;
-const POINTS_SMA = 5;
-const POINTS_MACD = 2;
-const MAX_SCORE = POINTS_RSI + POINTS_SMA + POINTS_MACD;
+const TIER_POINTS: Record<Tier, number> = { high: 10, medium: 5, low: 2 };
+
+const TIER_ORDER: Tier[] = ["high", "medium", "low"];
 
 function ratingForPct(pct: number): Rating {
   if (pct >= 80) return "strong_buy";
@@ -14,66 +23,42 @@ function ratingForPct(pct: number): Rating {
 }
 
 export function scoreDashboard(
-  latestClose: number,
+  latestPrice: PriceRow,
   latestIndicators: IndicatorRow,
   recentIndicators: IndicatorRow[],
+  weights: UserWeights,
 ): Score {
-  const rsi = latestIndicators.rsi_14;
-  const sma = latestIndicators.sma_200;
+  const entries = (Object.entries(weights) as [IndicatorId, Tier][])
+    .filter(([id]) => INDICATOR_REGISTRY[id] !== undefined)
+    .sort((a, b) => TIER_ORDER.indexOf(a[1]) - TIER_ORDER.indexOf(b[1]));
 
-  const rsiTriggered = rsi != null && rsi < 30;
-  const smaTriggered = sma != null && latestClose > sma;
+  const breakdown: ScoreBreakdownItem[] = entries.map(([id, tier]) => {
+    const def = INDICATOR_REGISTRY[id];
+    const result = def.evaluate(latestPrice, latestIndicators, recentIndicators);
+    const pointsMax = TIER_POINTS[tier];
+    return {
+      id,
+      label: def.label,
+      abbreviation: def.abbreviation,
+      tier,
+      points: result.triggered ? pointsMax : 0,
+      triggered: result.triggered,
+      displayValue: result.displayValue,
+    };
+  });
 
-  const lastThree = recentIndicators.slice(-3);
-  const crossInWindow = lastThree.some((r) => r.macd_cross_up === true);
-
-  const breakdown: ScoreBreakdownItem[] = [
-    {
-      id: "rsi_oversold",
-      label: "RSI Oversold",
-      tier: "high",
-      points: rsiTriggered ? POINTS_RSI : 0,
-      triggered: rsiTriggered,
-      displayValue:
-        rsi != null
-          ? rsiTriggered
-            ? `RSI: ${rsi.toFixed(1)} (below threshold 30)`
-            : `RSI: ${rsi.toFixed(1)} (threshold 30)`
-          : "RSI: n/a",
-    },
-    {
-      id: "above_sma_200",
-      label: "Above 200 SMA",
-      tier: "medium",
-      points: smaTriggered ? POINTS_SMA : 0,
-      triggered: smaTriggered,
-      displayValue:
-        sma != null
-          ? smaTriggered
-            ? `${(((latestClose - sma) / sma) * 100).toFixed(1)}% above SMA-200`
-            : `${(((sma - latestClose) / sma) * 100).toFixed(1)}% below SMA-200`
-          : "SMA-200: n/a",
-    },
-    {
-      id: "macd_bullish_cross",
-      label: "MACD Bullish Cross",
-      tier: "low",
-      points: crossInWindow ? POINTS_MACD : 0,
-      triggered: crossInWindow,
-      displayValue: crossInWindow
-        ? "Bullish cross in last 3 days"
-        : "No cross in last 3 days",
-    },
-  ];
-
-  const total = breakdown.reduce((sum, item) => sum + item.points, 0);
-  const percentage = Math.round((total / MAX_SCORE) * 100);
+  const total = breakdown.reduce((s, x) => s + x.points, 0);
+  const max = entries.reduce((s, [, tier]) => s + TIER_POINTS[tier], 0);
+  const percentage = max === 0 ? 50 : Math.round((total / max) * 100);
+  const triggeredCount = breakdown.filter((b) => b.triggered).length;
 
   return {
     total,
-    max: MAX_SCORE,
+    max,
     percentage,
     rating: ratingForPct(percentage),
+    triggeredCount,
+    totalCount: breakdown.length,
     breakdown,
   };
 }
