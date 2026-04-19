@@ -20,12 +20,28 @@ export async function getDb(): Promise<DuckDBConnection> {
 async function migrate(conn: DuckDBConnection): Promise<void> {
   await conn.run(`
     CREATE TABLE IF NOT EXISTS securities (
-      ticker   VARCHAR PRIMARY KEY,
-      name     VARCHAR NOT NULL,
-      sector   VARCHAR,
-      is_sp500 BOOLEAN DEFAULT TRUE
+      ticker VARCHAR PRIMARY KEY,
+      name   VARCHAR NOT NULL,
+      cik    INTEGER
     );
   `);
+
+  // Drop legacy columns from older installs.
+  const colsReader = await conn.runAndReadAll(
+    "SELECT column_name FROM information_schema.columns WHERE table_name = 'securities'",
+  );
+  const cols = new Set(
+    colsReader.getRowObjectsJS().map((r) => String(r.column_name)),
+  );
+  if (cols.has("sector")) {
+    await conn.run("ALTER TABLE securities DROP COLUMN sector");
+  }
+  if (cols.has("is_sp500")) {
+    await conn.run("ALTER TABLE securities DROP COLUMN is_sp500");
+  }
+  if (!cols.has("cik")) {
+    await conn.run("ALTER TABLE securities ADD COLUMN cik INTEGER");
+  }
 
   await conn.run(`
     CREATE TABLE IF NOT EXISTS ticker_cache (

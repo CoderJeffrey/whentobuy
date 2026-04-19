@@ -1,13 +1,13 @@
 import "dotenv/config";
 import { closeDb } from "../src/db.js";
 import { ensureTickerData } from "../src/services/backfill.js";
-import { loadSp500IfEmpty } from "../src/services/securities.js";
+import { ensureSecuritiesLoaded } from "../src/services/securities.js";
 
 const TICKERS = process.argv.slice(2);
 const SYMBOLS = TICKERS.length > 0 ? TICKERS : ["AAPL"];
 
 async function main(): Promise<void> {
-  await loadSp500IfEmpty();
+  await ensureSecuritiesLoaded();
   for (const sym of SYMBOLS) {
     console.log(`[backfill] ${sym}…`);
     await ensureTickerData(sym, { force: true });

@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "tsx src/index.ts",
     "backfill": "tsx scripts/backfill.ts",
+    "fetch-sec-tickers": "tsx scripts/fetch-sec-tickers.ts",
+    "test": "tsx --test src/**/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

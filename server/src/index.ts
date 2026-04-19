@@ -12,8 +12,8 @@ import {
   TickerNotFoundError,
 } from "./services/backfill.js";
 import {
+  ensureSecuritiesLoaded,
   getSecurity,
-  loadSp500IfEmpty,
   searchSecurities,
 } from "./services/securities.js";
 import type {
@@ -143,7 +143,6 @@ async function buildDashboard(ticker: string): Promise<DashboardResponse> {
   return {
     ticker: sym,
     name: security?.name ?? sym,
-    sector: security?.sector ?? null,
     asOf: latest.date,
     currentPrice: latest.close,
     priceChange: Number(priceChange.toFixed(2)),
@@ -174,7 +173,7 @@ function sendBackfillError(res: express.Response, err: unknown): void {
 
 async function bootstrap(): Promise<void> {
   await getDb();
-  await loadSp500IfEmpty();
+  await ensureSecuritiesLoaded();
   try {
     await ensureTickerData("AAPL");
     console.log("[bootstrap] AAPL ready");

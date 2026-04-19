@@ -152,7 +152,7 @@ export function SearchBar() {
                 type="button"
                 onClick={() => pick(sec)}
                 onMouseEnter={() => setActiveIdx(i)}
-                className="w-full text-left px-3 py-2 flex items-center gap-2 text-sm"
+                className="w-full text-left px-3 py-2 flex flex-col gap-0.5"
                 style={{
                   backgroundColor: active
                     ? "var(--bg-card-raised)"
@@ -163,29 +163,20 @@ export function SearchBar() {
                 data-active={active ? "true" : "false"}
               >
                 <span
-                  className="font-mono"
+                  className="font-mono text-sm"
                   style={{
                     color: "var(--accent)",
-                    minWidth: 56,
                     fontWeight: 500,
                   }}
                 >
                   {sec.ticker}
                 </span>
                 <span
-                  className="truncate flex-1"
-                  style={{ color: "var(--text-primary)" }}
+                  className="text-xs truncate"
+                  style={{ color: "var(--text-secondary)" }}
                 >
                   {sec.name}
                 </span>
-                {sec.sector && (
-                  <span
-                    className="text-[10px] truncate max-w-[140px]"
-                    style={{ color: "var(--text-tertiary)" }}
-                  >
-                    {sec.sector}
-                  </span>
-                )}
               </button>
             );
           })}
