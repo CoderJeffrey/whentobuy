@@ -65,28 +65,29 @@ export function PriceChart({
     const chart = createChart(containerRef.current, {
       autoSize: true,
       layout: {
-        background: { color: "#141414" },
-        textColor: "#9ca3af",
-        fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
+        background: { color: "#18181a" },
+        textColor: "#9a968f",
+        fontFamily:
+          '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
       },
       grid: {
-        vertLines: { color: "#1f1f1f" },
-        horzLines: { color: "#1f1f1f" },
+        vertLines: { color: "#242428" },
+        horzLines: { color: "#242428" },
       },
-      rightPriceScale: { borderColor: "#2a2a2a" },
-      timeScale: { borderColor: "#2a2a2a", timeVisible: false },
+      rightPriceScale: { borderColor: "#2a2a2d" },
+      timeScale: { borderColor: "#2a2a2d", timeVisible: false },
       crosshair: { mode: 1 },
     });
 
     const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: "#10b981",
-      downColor: "#ef4444",
-      wickUpColor: "#10b981",
-      wickDownColor: "#ef4444",
+      upColor: "#7a9a7d",
+      downColor: "#a66b6b",
+      wickUpColor: "#7a9a7d",
+      wickDownColor: "#a66b6b",
       borderVisible: false,
     });
     const smaSeries = chart.addSeries(LineSeries, {
-      color: "#d4af37",
+      color: "#c9b896",
       lineWidth: 2,
       priceLineVisible: false,
       lastValueVisible: true,
@@ -123,17 +124,22 @@ export function PriceChart({
 
   return (
     <section
-      className="rounded-2xl p-6 flex flex-col gap-4"
+      className="rounded-2xl p-8 flex flex-col gap-6"
       style={{
         backgroundColor: "var(--bg-card)",
         border: "1px solid var(--border)",
       }}
     >
       <div className="flex items-center justify-between">
-        <h3 className="text-xl font-semibold">Price History</h3>
+        <h3
+          className="text-xs tracking-label uppercase"
+          style={{ color: "var(--text-secondary)", fontWeight: 500 }}
+        >
+          Price History
+        </h3>
         <div
           className="inline-flex items-center rounded-lg p-1"
-          style={{ backgroundColor: "var(--bg-page)" }}
+          style={{ backgroundColor: "var(--bg-subtle)" }}
           role="tablist"
         >
           {TIMEFRAMES.map((tf) => {
@@ -145,12 +151,13 @@ export function PriceChart({
                 data-active={active}
                 type="button"
                 onClick={() => setTimeframe(tf)}
-                className="px-3 py-1 text-sm rounded-md font-medium transition-colors"
+                className="px-3 py-1 text-xs rounded-md transition-colors tracking-label uppercase"
                 style={{
                   backgroundColor: active
-                    ? "var(--bg-card-hover)"
+                    ? "var(--bg-card-raised)"
                     : "transparent",
-                  color: active ? "var(--gold)" : "var(--text-muted)",
+                  color: active ? "var(--accent)" : "var(--text-tertiary)",
+                  fontWeight: 500,
                 }}
               >
                 {tf}

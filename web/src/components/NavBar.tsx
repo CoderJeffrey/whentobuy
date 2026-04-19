@@ -9,10 +9,10 @@ function formatLastUpdated(asOf: string | undefined): string {
 
 export function NavBar({ asOf }: { asOf?: string }) {
   return (
-    <header className="flex items-center gap-4 py-5">
+    <header className="flex items-center gap-4 py-6">
       <h1
-        className="text-lg font-semibold tracking-tight whitespace-nowrap"
-        style={{ color: "var(--gold)" }}
+        className="text-base tracking-label uppercase whitespace-nowrap"
+        style={{ color: "var(--accent)", fontWeight: 500 }}
       >
         Should I Buy Now?
       </h1>
@@ -20,8 +20,8 @@ export function NavBar({ asOf }: { asOf?: string }) {
         <SearchBar />
       </div>
       <div
-        className="text-xs font-mono whitespace-nowrap"
-        style={{ color: "var(--text-muted)" }}
+        className="text-[11px] font-mono whitespace-nowrap"
+        style={{ color: "var(--text-tertiary)" }}
         data-testid="last-updated"
       >
         Last updated: {formatLastUpdated(asOf)}

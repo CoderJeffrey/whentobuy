@@ -1,6 +1,5 @@
 {
   "weights": {
-    "rsi_oversold": "high",
     "above_sma_20": "high",
     "bb_lower_touch": "medium",
     "macd_bullish_cross": "low"

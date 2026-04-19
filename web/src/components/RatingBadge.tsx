@@ -13,11 +13,12 @@ export function RatingBadge({ rating }: { rating: Rating }) {
     <div
       data-testid="rating-badge"
       data-rating={rating}
-      className="inline-flex items-center justify-center px-10 py-4 rounded-2xl text-3xl font-bold tracking-wide"
+      className="inline-flex items-center justify-center px-10 py-4 rounded-2xl text-2xl tracking-label uppercase"
       style={{
-        backgroundColor: `color-mix(in srgb, var(--rating-${rating}) 15%, transparent)`,
+        backgroundColor: "var(--bg-card-raised)",
         color: `var(--rating-${rating})`,
         border: `1px solid color-mix(in srgb, var(--rating-${rating}) 40%, transparent)`,
+        fontWeight: 500,
       }}
     >
       {LABELS[rating]}

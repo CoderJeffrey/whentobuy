@@ -64,16 +64,18 @@ export function SearchBar() {
     }
   }
 
+  const [focused, setFocused] = useState(false);
+
   return (
     <div ref={containerRef} className="relative w-full max-w-md">
       <div
-        className="flex items-center gap-2 px-3 py-2 rounded-md"
+        className="flex items-center gap-2 px-3 py-2 rounded-md transition-colors"
         style={{
-          backgroundColor: "var(--bg-card-hover)",
-          border: "1px solid var(--border)",
+          backgroundColor: "var(--bg-subtle)",
+          border: `1px solid ${focused ? "var(--border-strong)" : "var(--border)"}`,
         }}
       >
-        <span style={{ color: "var(--text-muted)" }} aria-hidden>
+        <span style={{ color: "var(--text-tertiary)" }} aria-hidden>
           🔍
         </span>
         <input
@@ -83,10 +85,14 @@ export function SearchBar() {
             setQ(e.target.value);
             setOpen(true);
           }}
-          onFocus={() => setOpen(true)}
+          onFocus={() => {
+            setOpen(true);
+            setFocused(true);
+          }}
+          onBlur={() => setFocused(false)}
           onKeyDown={onKeyDown}
           placeholder="Search stocks..."
-          className="flex-1 bg-transparent outline-none text-sm"
+          className="flex-1 bg-transparent outline-none text-sm placeholder:text-[color:var(--text-tertiary)]"
           style={{ color: "var(--text-primary)" }}
           data-testid="search-input"
           aria-label="Search stocks"
@@ -103,7 +109,7 @@ export function SearchBar() {
             }}
             aria-label="Clear search"
             className="text-base leading-none"
-            style={{ color: "var(--text-muted)" }}
+            style={{ color: "var(--text-tertiary)" }}
             data-testid="search-clear"
           >
             ×
@@ -116,15 +122,15 @@ export function SearchBar() {
           className="absolute left-0 right-0 mt-1 rounded-md overflow-hidden z-50"
           style={{
             backgroundColor: "var(--bg-card)",
-            border: "1px solid var(--border)",
-            boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+            border: "1px solid var(--border-strong)",
+            boxShadow: "0 12px 32px rgba(0, 0, 0, 0.45)",
           }}
           data-testid="search-dropdown"
         >
           {searchQ.isFetching && results.length === 0 && (
             <div
               className="px-3 py-3 text-xs"
-              style={{ color: "var(--text-muted)" }}
+              style={{ color: "var(--text-tertiary)" }}
             >
               Searching…
             </div>
@@ -132,7 +138,7 @@ export function SearchBar() {
           {!searchQ.isFetching && results.length === 0 && (
             <div
               className="px-3 py-3 text-xs"
-              style={{ color: "var(--text-muted)" }}
+              style={{ color: "var(--text-tertiary)" }}
               data-testid="search-empty"
             >
               No matches.
@@ -149,7 +155,7 @@ export function SearchBar() {
                 className="w-full text-left px-3 py-2 flex items-center gap-2 text-sm"
                 style={{
                   backgroundColor: active
-                    ? "var(--bg-card-hover)"
+                    ? "var(--bg-card-raised)"
                     : "transparent",
                 }}
                 data-testid="search-result"
@@ -157,16 +163,25 @@ export function SearchBar() {
                 data-active={active ? "true" : "false"}
               >
                 <span
-                  className="font-mono font-semibold"
-                  style={{ color: "var(--gold)", minWidth: 56 }}
+                  className="font-mono"
+                  style={{
+                    color: "var(--accent)",
+                    minWidth: 56,
+                    fontWeight: 500,
+                  }}
                 >
                   {sec.ticker}
                 </span>
-                <span className="truncate flex-1">{sec.name}</span>
+                <span
+                  className="truncate flex-1"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  {sec.name}
+                </span>
                 {sec.sector && (
                   <span
                     className="text-[10px] truncate max-w-[140px]"
-                    style={{ color: "var(--text-muted)" }}
+                    style={{ color: "var(--text-tertiary)" }}
                   >
                     {sec.sector}
                   </span>

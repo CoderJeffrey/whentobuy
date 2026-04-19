@@ -24,7 +24,7 @@ export function TickerLoading({
 
   return (
     <section
-      className="rounded-2xl p-12 flex flex-col items-center gap-6"
+      className="rounded-2xl p-12 flex flex-col items-center gap-8"
       style={{
         backgroundColor: "var(--bg-card)",
         border: "1px solid var(--border)",
@@ -32,17 +32,17 @@ export function TickerLoading({
       data-testid="ticker-loading"
       data-ticker={ticker}
     >
-      <div className="flex flex-col items-center gap-1">
+      <div className="flex flex-col items-center gap-2">
         <h2
-          className="text-4xl font-bold tracking-tight"
-          style={{ color: "var(--gold)" }}
+          className="text-4xl tracking-tight"
+          style={{ color: "var(--accent)", fontWeight: 500 }}
         >
           {ticker}
         </h2>
         {name && (
           <div
-            className="text-sm uppercase tracking-widest"
-            style={{ color: "var(--text-muted)" }}
+            className="text-xs uppercase tracking-label"
+            style={{ color: "var(--text-secondary)" }}
           >
             {name}
           </div>
@@ -52,7 +52,7 @@ export function TickerLoading({
       <div
         className="rounded-xl p-8 w-full max-w-md flex flex-col items-center gap-4"
         style={{
-          backgroundColor: "var(--bg-card-hover)",
+          backgroundColor: "var(--bg-card-raised)",
           border: "1px solid var(--border)",
         }}
       >
@@ -64,15 +64,16 @@ export function TickerLoading({
           ⏳
         </div>
         <div
-          className="text-sm font-medium text-center"
+          className="text-sm text-center"
           data-testid="ticker-loading-message"
           aria-live="polite"
+          style={{ color: "var(--text-primary)", fontWeight: 500 }}
         >
           {MESSAGES[idx]}
         </div>
         <div
           className="text-xs text-center"
-          style={{ color: "var(--text-muted)" }}
+          style={{ color: "var(--text-tertiary)" }}
         >
           Fetching 3 years of price history from Yahoo.
           <br />

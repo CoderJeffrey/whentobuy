@@ -36,7 +36,7 @@ export default function Dashboard() {
 
         {data && !error && (
           <div
-            className="flex flex-col gap-6 pb-12"
+            className="flex flex-col gap-8 pb-12"
             data-testid="dashboard-loaded"
             data-fetching={isFetching ? "true" : "false"}
           >
