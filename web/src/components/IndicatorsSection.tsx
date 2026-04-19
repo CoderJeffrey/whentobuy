@@ -103,23 +103,29 @@ export function IndicatorsSection({ data }: { data: DashboardResponse }) {
 
   return (
     <section
-      className="rounded-2xl p-6"
+      className="rounded-2xl p-8"
       style={{
         backgroundColor: "var(--bg-card)",
         border: "1px solid var(--border)",
       }}
       data-testid="indicators-section"
     >
-      <div className="flex items-center justify-between mb-5">
-        <h3 className="text-lg font-semibold">Indicators</h3>
+      <div className="flex items-center justify-between mb-6">
+        <h3
+          className="text-xs tracking-label uppercase"
+          style={{ color: "var(--text-secondary)", fontWeight: 500 }}
+        >
+          Indicators
+        </h3>
         <button
           type="button"
           onClick={() => setPickerOpen(true)}
-          className="px-3 py-1.5 rounded-md text-xs font-semibold"
+          className="px-3 py-1.5 rounded-md text-xs tracking-label uppercase"
           style={{
-            color: "var(--gold)",
-            border: "1px solid var(--gold)",
+            color: "var(--accent)",
+            border: "1px solid var(--border-strong)",
             backgroundColor: "transparent",
+            fontWeight: 500,
           }}
           data-testid="indicators-add"
         >
@@ -129,19 +135,20 @@ export function IndicatorsSection({ data }: { data: DashboardResponse }) {
 
       {totalCount === 0 && (
         <div
-          className="py-12 text-center flex flex-col items-center gap-3"
+          className="py-16 text-center flex flex-col items-center gap-4"
           data-testid="indicators-empty"
         >
-          <div className="text-sm" style={{ color: "var(--text-muted)" }}>
+          <div className="text-sm" style={{ color: "var(--text-secondary)" }}>
             No indicators configured yet.
           </div>
           <button
             type="button"
             onClick={() => setPickerOpen(true)}
-            className="px-4 py-2 rounded-md text-sm font-semibold"
+            className="px-4 py-2 rounded-md text-sm"
             style={{
-              backgroundColor: "var(--gold)",
-              color: "#0a0a0a",
+              backgroundColor: "var(--accent)",
+              color: "var(--bg-page)",
+              fontWeight: 500,
             }}
             data-testid="indicators-add-first"
           >
@@ -159,9 +166,9 @@ export function IndicatorsSection({ data }: { data: DashboardResponse }) {
           {TIERS.map(({ tier, label, sub }) => (
             <div
               key={tier}
-              className="rounded-xl p-3 flex flex-col gap-2"
+              className="rounded-xl p-4 flex flex-col gap-3"
               style={{
-                backgroundColor: "var(--bg-card-hover)",
+                backgroundColor: "var(--bg-card-raised)",
                 border: "1px solid var(--border)",
                 minHeight: 200,
               }}
@@ -169,24 +176,24 @@ export function IndicatorsSection({ data }: { data: DashboardResponse }) {
             >
               <div className="flex items-center justify-between">
                 <div
-                  className="text-[10px] font-semibold tracking-wider"
-                  style={{ color: `var(--tier-${tier})` }}
+                  className="text-[10px] tracking-label uppercase"
+                  style={{ color: `var(--tier-${tier})`, fontWeight: 500 }}
                 >
                   {label}
                 </div>
                 <div
                   className="text-[10px] font-mono"
-                  style={{ color: "var(--text-muted)" }}
+                  style={{ color: "var(--text-tertiary)" }}
                 >
                   {sub}
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-3">
                 {idsByTier[tier].length === 0 && (
                   <div
                     className="text-xs italic py-4 text-center"
-                    style={{ color: "var(--text-muted)" }}
+                    style={{ color: "var(--text-tertiary)" }}
                   >
                     Empty
                   </div>
@@ -225,9 +232,9 @@ export function IndicatorsSection({ data }: { data: DashboardResponse }) {
         <div
           className="mt-4 p-3 rounded-md text-xs"
           style={{
-            backgroundColor: "var(--bg-card-hover)",
-            border: "1px solid var(--rating-immediate_sell)",
-            color: "var(--rating-immediate_sell)",
+            backgroundColor: "var(--bg-card-raised)",
+            border: "1px solid var(--negative)",
+            color: "var(--negative)",
           }}
           data-testid="indicators-save-error"
         >

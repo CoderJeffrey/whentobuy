@@ -80,7 +80,7 @@ export function Gauge({ percentage, rating, total, max }: GaugeProps) {
             key={z.rating}
             d={arcPath(z.from, z.to)}
             fill={z.color}
-            opacity={z.rating === rating ? 1 : 0.35}
+            opacity={z.rating === rating ? 1 : 0.15}
           />
         ))}
 
@@ -90,24 +90,24 @@ export function Gauge({ percentage, rating, total, max }: GaugeProps) {
           x2={nx}
           y2={ny}
           stroke="var(--text-primary)"
-          strokeWidth={3}
+          strokeWidth={2}
           strokeLinecap="round"
         />
-        <circle cx={CX} cy={CY} r={8} fill="var(--text-primary)" />
-        <circle cx={CX} cy={CY} r={4} fill="var(--bg-card)" />
+        <circle cx={CX} cy={CY} r={7} fill="var(--text-primary)" />
+        <circle cx={CX} cy={CY} r={3.5} fill="var(--bg-card)" />
       </svg>
 
-      <div className="flex flex-col items-center -mt-2 gap-1">
+      <div className="flex flex-col items-center -mt-1 gap-2">
         <div
-          className="text-2xl font-bold tracking-wider"
-          style={{ color: ratingColor }}
+          className="text-xl tracking-label uppercase"
+          style={{ color: ratingColor, fontWeight: 500 }}
           data-testid="gauge-rating"
         >
           {RATING_LABEL[rating]}
         </div>
         <div
-          className="font-mono text-sm"
-          style={{ color: "var(--text-muted)" }}
+          className="font-mono text-xs"
+          style={{ color: "var(--text-tertiary)" }}
           data-testid="gauge-score"
         >
           {total} / {max} · {clamped}%

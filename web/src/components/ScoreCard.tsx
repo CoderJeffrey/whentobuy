@@ -6,40 +6,43 @@ export function ScoreCard({ data }: { data: DashboardResponse }) {
     data;
   const changePositive = priceChange >= 0;
   const changeColor = changePositive
-    ? "var(--rating-strong_buy)"
-    : "var(--rating-immediate_sell)";
+    ? "var(--positive)"
+    : "var(--negative)";
 
   return (
     <section
-      className="rounded-2xl p-10 flex flex-col items-center gap-6"
+      className="rounded-2xl p-10 flex flex-col items-center gap-8"
       style={{
         backgroundColor: "var(--bg-card)",
         border: "1px solid var(--border)",
+        boxShadow:
+          "0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 8px 32px rgba(0, 0, 0, 0.4)",
       }}
     >
-      <div className="flex flex-col items-center gap-2">
+      <div className="flex flex-col items-center gap-3">
         <h2
-          className="text-5xl font-bold tracking-tight"
-          style={{ color: "var(--gold)" }}
+          className="text-5xl tracking-tight"
+          style={{ color: "var(--accent)", fontWeight: 500 }}
           data-testid="ticker"
         >
           {ticker}
         </h2>
         <div
-          className="text-sm uppercase tracking-widest"
-          style={{ color: "var(--text-muted)" }}
+          className="text-xs uppercase tracking-label"
+          style={{ color: "var(--text-secondary)" }}
         >
           {name}
         </div>
-        <div className="flex items-baseline gap-3 mt-1">
+        <div className="flex items-baseline gap-3 mt-2">
           <span
-            className="font-mono text-4xl font-medium"
+            className="font-mono text-4xl"
+            style={{ fontWeight: 500, color: "var(--text-primary)" }}
             data-testid="current-price"
           >
             ${currentPrice.toFixed(2)}
           </span>
           <span
-            className="font-mono text-lg"
+            className="font-mono text-base"
             style={{ color: changeColor }}
             data-testid="price-change"
           >

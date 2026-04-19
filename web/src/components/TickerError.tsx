@@ -16,7 +16,7 @@ export function TickerError({
 
   if (code === "TICKER_NOT_FOUND") {
     return (
-      <Wrap testId="ticker-error-not-found" border="var(--rating-immediate_sell)">
+      <Wrap testId="ticker-error-not-found" border="var(--negative)">
         <Title>❌ Ticker Not Found</Title>
         <Body>
           <span className="font-mono">"{ticker}"</span> isn't a valid ticker, or
@@ -45,7 +45,7 @@ export function TickerError({
   }
 
   return (
-    <Wrap testId="ticker-error-network" border="var(--rating-immediate_sell)">
+    <Wrap testId="ticker-error-network" border="var(--negative)">
       <Title>⚠ Something Went Wrong</Title>
       <Body>
         Couldn't load data for {ticker}.
@@ -88,14 +88,21 @@ function Wrap({
 }
 
 function Title({ children }: { children: React.ReactNode }) {
-  return <h2 className="text-2xl font-semibold">{children}</h2>;
+  return (
+    <h2
+      className="text-2xl tracking-tight"
+      style={{ color: "var(--text-primary)", fontWeight: 500 }}
+    >
+      {children}
+    </h2>
+  );
 }
 
 function Body({ children }: { children: React.ReactNode }) {
   return (
     <div
       className="text-sm max-w-md"
-      style={{ color: "var(--text-muted)" }}
+      style={{ color: "var(--text-secondary)" }}
     >
       {children}
     </div>
@@ -111,8 +118,12 @@ function RetryButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="px-4 py-2 rounded-md text-sm font-semibold"
-      style={{ backgroundColor: "var(--gold)", color: "#0a0a0a" }}
+      className="px-4 py-2 rounded-md text-sm"
+      style={{
+        backgroundColor: "var(--accent)",
+        color: "var(--bg-page)",
+        fontWeight: 500,
+      }}
       data-testid="ticker-error-retry"
     >
       Retry
@@ -124,10 +135,11 @@ function BackToAaplLink() {
   return (
     <Link
       to="/ticker/AAPL"
-      className="px-4 py-2 rounded-md text-sm font-semibold"
+      className="px-4 py-2 rounded-md text-sm"
       style={{
-        color: "var(--text-primary)",
+        color: "var(--text-secondary)",
         border: "1px solid var(--border)",
+        fontWeight: 500,
       }}
       data-testid="ticker-error-back"
     >

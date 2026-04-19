@@ -7,23 +7,47 @@
 :root {
   color-scheme: dark;
 
-  --bg-page: #0a0a0a;
-  --bg-card: #141414;
-  --bg-card-hover: #1c1c1c;
-  --border: #2a2a2a;
-  --text-primary: #f5f5f5;
-  --text-muted: #9ca3af;
-  --gold: #d4af37;
+  /* Backgrounds — warm charcoal scale */
+  --bg-page: #0f0f0e;
+  --bg-card: #18181a;
+  --bg-card-raised: #1f1f22;
+  --bg-subtle: #242428;
+  /* Legacy alias, kept so any remaining references still resolve */
+  --bg-card-hover: #1f1f22;
 
-  --rating-strong_buy: #10b981;
-  --rating-weak_buy: #34d399;
-  --rating-hold: #f59e0b;
-  --rating-weak_sell: #f87171;
-  --rating-immediate_sell: #ef4444;
+  /* Borders */
+  --border: #2a2a2d;
+  --border-strong: #35353a;
 
-  --tier-high: #ef4444;
-  --tier-medium: #f59e0b;
-  --tier-low: #9ca3af;
+  /* Text — warm off-white scale */
+  --text-primary: #edeae4;
+  --text-secondary: #9a968f;
+  --text-tertiary: #61605c;
+  /* Legacy alias */
+  --text-muted: #9a968f;
+
+  /* Accent — muted champagne */
+  --accent: #c9b896;
+  --accent-dim: #8a7f6e;
+  /* Legacy alias */
+  --gold: #c9b896;
+
+  /* Ratings — desaturated */
+  --rating-immediate_sell: #8b3a3a;
+  --rating-weak_sell: #a65d5d;
+  --rating-hold: #9c8547;
+  --rating-weak_buy: #6b8a6d;
+  --rating-strong_buy: #4c7a57;
+
+  /* Semantic (non-rating UI) */
+  --positive: #7a9a7d;
+  --negative: #a66b6b;
+  --neutral: #9a968f;
+
+  /* Tier accents */
+  --tier-high: #a66b6b;
+  --tier-medium: #9c8547;
+  --tier-low: #61605c;
 }
 
 html,
@@ -53,4 +77,8 @@ body {
     Menlo,
     monospace;
   font-variant-numeric: tabular-nums;
+}
+
+.tracking-label {
+  letter-spacing: 0.08em;
 }

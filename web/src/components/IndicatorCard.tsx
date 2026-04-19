@@ -1,9 +1,9 @@
 import type { Tier } from "../types";
 
 const TIER_RGB: Record<Tier, string> = {
-  high: "239, 68, 68",
-  medium: "245, 158, 11",
-  low: "156, 163, 175",
+  high: "166, 107, 107",
+  medium: "156, 133, 71",
+  low: "97, 96, 92",
 };
 
 export interface IndicatorCardProps {
@@ -39,34 +39,31 @@ export function IndicatorCard(props: IndicatorCardProps) {
     onCancelRemove,
   } = props;
 
-  const triggeredBg = triggered
-    ? `rgba(${TIER_RGB[tier]}, 0.08)`
-    : "var(--bg-card)";
-
-  const triggeredBorder = triggered
-    ? `rgba(${TIER_RGB[tier]}, 0.35)`
+  const bg = triggered ? "var(--bg-card-raised)" : "var(--bg-card)";
+  const border = triggered
+    ? `rgba(${TIER_RGB[tier]}, 0.4)`
     : "var(--border)";
 
   return (
     <div
-      className="rounded-xl p-3 flex flex-col gap-1.5 relative"
+      className="rounded-xl p-4 flex flex-col gap-2 relative transition-colors"
       style={{
-        backgroundColor: triggeredBg,
-        border: `1px solid ${triggeredBorder}`,
+        backgroundColor: bg,
+        border: `1px solid ${border}`,
       }}
       data-testid="indicator-card"
       data-indicator-id={id}
       data-triggered={triggered ? "true" : "false"}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="text-sm font-semibold leading-tight">{label}</div>
+        <div className="text-sm font-medium leading-tight">{label}</div>
         <div className="flex items-center gap-2 shrink-0">
           {triggered && (
             <span
-              className="font-mono text-xs font-bold px-1.5 py-0.5 rounded"
+              className="font-mono text-xs font-semibold px-1.5 py-0.5 rounded"
               style={{
-                color: "var(--rating-strong_buy)",
-                backgroundColor: "rgba(16, 185, 129, 0.12)",
+                color: "var(--positive)",
+                border: "1px solid rgba(122, 154, 125, 0.3)",
               }}
               data-testid="indicator-points-badge"
             >
@@ -78,7 +75,7 @@ export function IndicatorCard(props: IndicatorCardProps) {
             onClick={onRemove}
             aria-label={`Remove ${label}`}
             className="text-base leading-none w-5 h-5 flex items-center justify-center rounded hover:bg-white/5"
-            style={{ color: "var(--text-muted)" }}
+            style={{ color: "var(--text-tertiary)" }}
             data-testid="indicator-remove"
           >
             ×
@@ -87,15 +84,15 @@ export function IndicatorCard(props: IndicatorCardProps) {
       </div>
 
       <div
-        className="text-[11px] font-mono"
-        style={{ color: "var(--text-muted)" }}
+        className="text-[11px] font-mono tracking-label uppercase"
+        style={{ color: "var(--text-tertiary)" }}
       >
         {abbreviation} · {category.replace("_", " ")}
       </div>
 
       <div
         className="text-xs leading-snug"
-        style={{ color: "var(--text-muted)" }}
+        style={{ color: "var(--text-secondary)" }}
       >
         {triggered ? displayValue : description}
       </div>
@@ -104,8 +101,8 @@ export function IndicatorCard(props: IndicatorCardProps) {
         <div
           className="absolute inset-0 rounded-xl flex flex-col items-center justify-center gap-3 p-4"
           style={{
-            backgroundColor: "rgba(10,10,10,0.92)",
-            border: "1px solid var(--border)",
+            backgroundColor: "rgba(15, 15, 14, 0.94)",
+            border: "1px solid var(--border-strong)",
           }}
           data-testid="indicator-remove-confirm"
         >
@@ -116,7 +113,7 @@ export function IndicatorCard(props: IndicatorCardProps) {
               onClick={onCancelRemove}
               className="px-3 py-1.5 rounded text-xs"
               style={{
-                color: "var(--text-muted)",
+                color: "var(--text-secondary)",
                 border: "1px solid var(--border)",
               }}
               data-testid="indicator-remove-cancel"
@@ -126,10 +123,10 @@ export function IndicatorCard(props: IndicatorCardProps) {
             <button
               type="button"
               onClick={onConfirmRemove}
-              className="px-3 py-1.5 rounded text-xs font-semibold"
+              className="px-3 py-1.5 rounded text-xs font-medium"
               style={{
-                backgroundColor: "var(--rating-immediate_sell)",
-                color: "#0a0a0a",
+                backgroundColor: "var(--negative)",
+                color: "var(--text-primary)",
               }}
               data-testid="indicator-remove-confirm-btn"
             >
