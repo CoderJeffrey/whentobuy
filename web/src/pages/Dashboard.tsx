@@ -1,14 +1,22 @@
 import { useQuery } from "@tanstack/react-query";
+import { useParams } from "react-router-dom";
 import { fetchDashboard } from "../lib/api";
 import { IndicatorsSection } from "../components/IndicatorsSection";
 import { NavBar } from "../components/NavBar";
 import { PriceChart } from "../components/PriceChart";
 import { ScoreCard } from "../components/ScoreCard";
+import { TickerError } from "../components/TickerError";
+import { TickerLoading } from "../components/TickerLoading";
 
 export default function Dashboard() {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["dashboard"],
-    queryFn: fetchDashboard,
+  const { symbol } = useParams<{ symbol: string }>();
+  const ticker = (symbol ?? "AAPL").toUpperCase();
+
+  const { data, isPending, error, refetch, isFetching } = useQuery({
+    queryKey: ["dashboard", ticker],
+    queryFn: ({ signal }) => fetchDashboard(ticker, signal),
+    staleTime: 5 * 60_000,
+    retry: false,
   });
 
   return (
@@ -16,42 +24,22 @@ export default function Dashboard() {
       <div className="max-w-6xl mx-auto px-6">
         <NavBar asOf={data?.asOf} />
 
-        {isLoading && (
-          <div
-            className="rounded-2xl p-16 text-center"
-            style={{
-              backgroundColor: "var(--bg-card)",
-              border: "1px solid var(--border)",
-              color: "var(--text-muted)",
-            }}
-            data-testid="loading"
-          >
-            Loading dashboard…
-          </div>
+        {isPending && <TickerLoading ticker={ticker} />}
+
+        {!isPending && error && (
+          <TickerError
+            ticker={ticker}
+            error={error}
+            onRetry={() => refetch()}
+          />
         )}
 
-        {error && (
+        {data && !error && (
           <div
-            className="rounded-2xl p-8 text-center"
-            style={{
-              backgroundColor: "var(--bg-card)",
-              border: "1px solid var(--rating-immediate_sell)",
-              color: "var(--rating-immediate_sell)",
-            }}
-            data-testid="error"
+            className="flex flex-col gap-6 pb-12"
+            data-testid="dashboard-loaded"
+            data-fetching={isFetching ? "true" : "false"}
           >
-            <div className="font-semibold mb-2">Failed to load dashboard</div>
-            <div
-              className="text-sm font-mono"
-              style={{ color: "var(--text-muted)" }}
-            >
-              {error instanceof Error ? error.message : String(error)}
-            </div>
-          </div>
-        )}
-
-        {data && (
-          <div className="flex flex-col gap-6 pb-12">
             <ScoreCard data={data} />
             <IndicatorsSection data={data} />
             <PriceChart

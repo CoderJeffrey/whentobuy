@@ -2,7 +2,8 @@ import type { DashboardResponse } from "../types";
 import { Gauge } from "./Gauge";
 
 export function ScoreCard({ data }: { data: DashboardResponse }) {
-  const { ticker, currentPrice, priceChange, priceChangePct, score } = data;
+  const { ticker, name, currentPrice, priceChange, priceChangePct, score } =
+    data;
   const changePositive = priceChange >= 0;
   const changeColor = changePositive
     ? "var(--rating-strong_buy)"
@@ -28,7 +29,7 @@ export function ScoreCard({ data }: { data: DashboardResponse }) {
           className="text-sm uppercase tracking-widest"
           style={{ color: "var(--text-muted)" }}
         >
-          Apple Inc.
+          {name}
         </div>
         <div className="flex items-baseline gap-3 mt-1">
           <span

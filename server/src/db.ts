@@ -19,19 +19,40 @@ export async function getDb(): Promise<DuckDBConnection> {
 
 async function migrate(conn: DuckDBConnection): Promise<void> {
   await conn.run(`
+    CREATE TABLE IF NOT EXISTS securities (
+      ticker   VARCHAR PRIMARY KEY,
+      name     VARCHAR NOT NULL,
+      sector   VARCHAR,
+      is_sp500 BOOLEAN DEFAULT TRUE
+    );
+  `);
+
+  await conn.run(`
+    CREATE TABLE IF NOT EXISTS ticker_cache (
+      ticker          VARCHAR PRIMARY KEY,
+      last_fetched_at TIMESTAMP NOT NULL,
+      status          VARCHAR NOT NULL
+    );
+  `);
+
+  await conn.run(`
     CREATE TABLE IF NOT EXISTS prices (
-      date      DATE PRIMARY KEY,
+      ticker    VARCHAR NOT NULL,
+      date      DATE NOT NULL,
       open      DOUBLE NOT NULL,
       high      DOUBLE NOT NULL,
       low       DOUBLE NOT NULL,
       close     DOUBLE NOT NULL,
       adj_close DOUBLE NOT NULL,
-      volume    BIGINT NOT NULL
+      volume    BIGINT NOT NULL,
+      PRIMARY KEY (ticker, date)
     );
   `);
+
   await conn.run(`
     CREATE TABLE IF NOT EXISTS indicators (
-      date             DATE PRIMARY KEY,
+      ticker           VARCHAR NOT NULL,
+      date             DATE NOT NULL,
       rsi_14           DOUBLE,
       sma_20           DOUBLE,
       sma_50           DOUBLE,
@@ -41,30 +62,17 @@ async function migrate(conn: DuckDBConnection): Promise<void> {
       macd_cross_up    BOOLEAN,
       bb_lower         DOUBLE,
       pct_from_52w_low DOUBLE,
-      volume_avg_20    DOUBLE
+      volume_avg_20    DOUBLE,
+      PRIMARY KEY (ticker, date)
     );
   `);
-}
 
-export async function recreateIndicatorsTable(
-  conn: DuckDBConnection,
-): Promise<void> {
-  await conn.run("DROP TABLE IF EXISTS indicators");
-  await conn.run(`
-    CREATE TABLE indicators (
-      date             DATE PRIMARY KEY,
-      rsi_14           DOUBLE,
-      sma_20           DOUBLE,
-      sma_50           DOUBLE,
-      sma_200          DOUBLE,
-      macd             DOUBLE,
-      macd_signal      DOUBLE,
-      macd_cross_up    BOOLEAN,
-      bb_lower         DOUBLE,
-      pct_from_52w_low DOUBLE,
-      volume_avg_20    DOUBLE
-    );
-  `);
+  await conn.run(
+    "CREATE INDEX IF NOT EXISTS idx_prices_ticker ON prices(ticker)",
+  );
+  await conn.run(
+    "CREATE INDEX IF NOT EXISTS idx_indicators_ticker ON indicators(ticker)",
+  );
 }
 
 export async function closeDb(): Promise<void> {

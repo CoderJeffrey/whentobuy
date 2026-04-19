@@ -69,6 +69,8 @@ export interface SmaPoint {
 
 export interface DashboardResponse {
   ticker: string;
+  name: string;
+  sector: string | null;
   asOf: string;
   currentPrice: number;
   priceChange: number;
@@ -82,4 +84,27 @@ export type UserWeights = Partial<Record<IndicatorId, Tier>>;
 
 export interface UserConfig {
   weights: UserWeights;
+}
+
+export interface Security {
+  ticker: string;
+  name: string;
+  sector: string | null;
+}
+
+export type ApiErrorCode =
+  | "TICKER_NOT_FOUND"
+  | "RATE_LIMITED"
+  | "NETWORK_ERROR"
+  | "INTERNAL";
+
+export class ApiError extends Error {
+  code: ApiErrorCode;
+  status: number;
+  constructor(message: string, code: ApiErrorCode, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.code = code;
+    this.status = status;
+  }
 }
