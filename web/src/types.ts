@@ -70,7 +70,6 @@ export interface SmaPoint {
 export interface DashboardResponse {
   ticker: string;
   name: string;
-  sector: string | null;
   asOf: string;
   currentPrice: number;
   priceChange: number;
@@ -89,7 +88,7 @@ export interface UserConfig {
 export interface Security {
   ticker: string;
   name: string;
-  sector: string | null;
+  cik?: number | null;
 }
 
 export type ApiErrorCode =

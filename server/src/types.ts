@@ -70,7 +70,6 @@ export interface SmaPoint {
 export interface DashboardResponse {
   ticker: string;
   name: string;
-  sector: string | null;
   asOf: string;
   currentPrice: number;
   priceChange: number;

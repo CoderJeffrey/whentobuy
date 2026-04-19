@@ -27,6 +27,12 @@ export class NetworkError extends Error {
 const yahooFinance = new YahooFinance();
 yahooFinance._notices.suppress(["yahooSurvey", "ripHistorical"]);
 
+// SEC uses dots for class shares (BRK.B); Yahoo uses dashes (BRK-B).
+// Our storage form is whatever came from SEC, but convert defensively.
+export function toYahooTicker(ticker: string): string {
+  return ticker.replace(/\./g, "-");
+}
+
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
@@ -102,7 +108,7 @@ export async function ensureTickerData(
 
   let chart: ChartResultArray;
   try {
-    chart = await yahooFinance.chart(sym, {
+    chart = await yahooFinance.chart(toYahooTicker(sym), {
       period1,
       period2,
       interval: "1d",
