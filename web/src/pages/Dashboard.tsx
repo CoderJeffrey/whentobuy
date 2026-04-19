@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchDashboard } from "../lib/api";
-import { BreakdownCard } from "../components/BreakdownCard";
+import { IndicatorsSection } from "../components/IndicatorsSection";
 import { NavBar } from "../components/NavBar";
 import { PriceChart } from "../components/PriceChart";
 import { ScoreCard } from "../components/ScoreCard";
@@ -14,7 +14,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen">
       <div className="max-w-6xl mx-auto px-6">
-        <NavBar />
+        <NavBar asOf={data?.asOf} />
 
         {isLoading && (
           <div
@@ -53,7 +53,7 @@ export default function Dashboard() {
         {data && (
           <div className="flex flex-col gap-6 pb-12">
             <ScoreCard data={data} />
-            <BreakdownCard score={data.score} />
+            <IndicatorsSection data={data} />
             <PriceChart
               priceHistory={data.priceHistory}
               sma200Series={data.sma200Series}
