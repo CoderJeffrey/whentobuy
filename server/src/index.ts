@@ -5,6 +5,17 @@ import { ConfigError, loadConfig, saveConfig } from "./config.js";
 import { getDb } from "./db.js";
 import { INDICATOR_METADATA } from "./indicator-registry.js";
 import { scoreDashboard } from "./scoring.js";
+import {
+  ensureTickerData,
+  NetworkError,
+  RateLimitError,
+  TickerNotFoundError,
+} from "./services/backfill.js";
+import {
+  getSecurity,
+  loadSp500IfEmpty,
+  searchSecurities,
+} from "./services/securities.js";
 import type {
   DashboardResponse,
   IndicatorRow,
@@ -42,20 +53,39 @@ function asNullableBoolean(v: unknown): boolean | null {
   return Boolean(v);
 }
 
-async function buildDashboard(): Promise<DashboardResponse> {
+function sqlLit(s: string): string {
+  return `'${s.replace(/'/g, "''")}'`;
+}
+
+function sanitizeTicker(input: unknown): string {
+  if (typeof input !== "string") {
+    throw new TickerNotFoundError(String(input));
+  }
+  const s = input.trim().toUpperCase();
+  if (!s || !/^[A-Z][A-Z0-9.\-]{0,9}$/.test(s)) {
+    throw new TickerNotFoundError(s);
+  }
+  return s;
+}
+
+async function buildDashboard(ticker: string): Promise<DashboardResponse> {
+  const sym = sanitizeTicker(ticker);
+  await ensureTickerData(sym);
+
   const db = await getDb();
+  const security = await getSecurity(sym);
 
   const priceReader = await db.runAndReadAll(
-    "SELECT date, open, high, low, close, adj_close, volume FROM prices ORDER BY date ASC",
+    `SELECT date, open, high, low, close, adj_close, volume FROM prices WHERE ticker = ${sqlLit(sym)} ORDER BY date ASC`,
   );
   const priceRows = priceReader.getRowObjectsJS();
 
   if (priceRows.length === 0) {
-    throw new Error("no price data — run `npm run backfill` first");
+    throw new TickerNotFoundError(sym);
   }
 
   const indicatorReader = await db.runAndReadAll(
-    "SELECT date, rsi_14, sma_20, sma_50, sma_200, macd, macd_signal, macd_cross_up, bb_lower, pct_from_52w_low, volume_avg_20 FROM indicators ORDER BY date ASC",
+    `SELECT date, rsi_14, sma_20, sma_50, sma_200, macd, macd_signal, macd_cross_up, bb_lower, pct_from_52w_low, volume_avg_20 FROM indicators WHERE ticker = ${sqlLit(sym)} ORDER BY date ASC`,
   );
   const indicatorRows = indicatorReader.getRowObjectsJS();
 
@@ -111,7 +141,9 @@ async function buildDashboard(): Promise<DashboardResponse> {
   );
 
   return {
-    ticker: "AAPL",
+    ticker: sym,
+    name: security?.name ?? sym,
+    sector: security?.sector ?? null,
     asOf: latest.date,
     currentPrice: latest.close,
     priceChange: Number(priceChange.toFixed(2)),
@@ -122,6 +154,35 @@ async function buildDashboard(): Promise<DashboardResponse> {
   };
 }
 
+function sendBackfillError(res: express.Response, err: unknown): void {
+  if (err instanceof TickerNotFoundError) {
+    res.status(404).json({ error: err.message, code: "TICKER_NOT_FOUND" });
+    return;
+  }
+  if (err instanceof RateLimitError) {
+    res.status(429).json({ error: err.message, code: "RATE_LIMITED" });
+    return;
+  }
+  if (err instanceof NetworkError) {
+    res.status(502).json({ error: err.message, code: "NETWORK_ERROR" });
+    return;
+  }
+  const message = err instanceof Error ? err.message : "internal error";
+  console.error("[backfill] unexpected:", err);
+  res.status(500).json({ error: message, code: "INTERNAL" });
+}
+
+async function bootstrap(): Promise<void> {
+  await getDb();
+  await loadSp500IfEmpty();
+  try {
+    await ensureTickerData("AAPL");
+    console.log("[bootstrap] AAPL ready");
+  } catch (err) {
+    console.warn("[bootstrap] AAPL backfill failed:", err);
+  }
+}
+
 const app = express();
 app.use(cors({ origin: "http://localhost:5173" }));
 app.use(express.json());
@@ -130,14 +191,51 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/dashboard", async (_req, res) => {
+app.get("/api/dashboard", async (req, res) => {
+  const tickerParam =
+    typeof req.query.ticker === "string" ? req.query.ticker : "AAPL";
   try {
-    const payload = await buildDashboard();
+    const payload = await buildDashboard(tickerParam);
     res.json(payload);
   } catch (err) {
+    if (
+      err instanceof TickerNotFoundError ||
+      err instanceof RateLimitError ||
+      err instanceof NetworkError
+    ) {
+      sendBackfillError(res, err);
+      return;
+    }
     console.error("[/api/dashboard] error:", err);
     const message = err instanceof Error ? err.message : "internal error";
-    res.status(500).json({ error: message });
+    res.status(500).json({ error: message, code: "INTERNAL" });
+  }
+});
+
+app.get("/api/search", async (req, res) => {
+  try {
+    const q = typeof req.query.q === "string" ? req.query.q : "";
+    const limit =
+      typeof req.query.limit === "string" ? Number(req.query.limit) : 10;
+    const results = await searchSecurities(q, Number.isFinite(limit) ? limit : 10);
+    res.json(results);
+  } catch (err) {
+    console.error("[/api/search] error:", err);
+    res.status(500).json({ error: "search failed" });
+  }
+});
+
+app.get("/api/securities/:ticker", async (req, res) => {
+  try {
+    const sec = await getSecurity(req.params.ticker);
+    if (!sec) {
+      res.status(404).json({ error: "not found" });
+      return;
+    }
+    res.json(sec);
+  } catch (err) {
+    console.error("[/api/securities] error:", err);
+    res.status(500).json({ error: "lookup failed" });
   }
 });
 
@@ -168,6 +266,12 @@ app.put("/api/config", (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`[server] listening on http://localhost:${PORT}`);
-});
+bootstrap()
+  .catch((err) => {
+    console.error("[bootstrap] failed:", err);
+  })
+  .finally(() => {
+    app.listen(PORT, () => {
+      console.log(`[server] listening on http://localhost:${PORT}`);
+    });
+  });
