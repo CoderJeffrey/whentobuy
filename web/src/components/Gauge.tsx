@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { RATING_LABELS } from "../lib/ratings";
 import type { Rating } from "../types";
 
@@ -53,6 +54,7 @@ export function Gauge({ percentage, rating, total, max }: GaugeProps) {
   const needleAngle = pctToAngle(clamped);
   const [nx, ny] = polar(needleAngle, R_OUTER - 6);
   const ratingColor = `var(--rating-${rating})`;
+  const [hovered, setHovered] = useState<Rating | null>(null);
 
   return (
     <div
@@ -61,34 +63,77 @@ export function Gauge({ percentage, rating, total, max }: GaugeProps) {
       data-rating={rating}
       data-percentage={clamped}
     >
-      <svg
-        viewBox="0 0 300 180"
-        width="300"
-        height="180"
-        role="img"
-        aria-label={`Gauge: ${RATING_LABELS[rating]}, ${clamped}%`}
-      >
-        {ZONES.map((z) => (
-          <path
-            key={z.rating}
-            d={arcPath(z.from, z.to)}
-            fill={z.color}
-            opacity={z.rating === rating ? 1 : 0.15}
-          />
-        ))}
+      <div className="relative">
+        <svg
+          viewBox="0 0 300 180"
+          width="300"
+          height="180"
+          role="img"
+          aria-label={`Gauge: ${RATING_LABELS[rating]}, ${clamped}%`}
+        >
+          {ZONES.map((z) => {
+            const isActive = z.rating === rating;
+            const isHovered = z.rating === hovered;
+            const opacity = isActive ? 1 : isHovered ? 0.55 : 0.15;
+            return (
+              <path
+                key={z.rating}
+                d={arcPath(z.from, z.to)}
+                fill={z.color}
+                opacity={opacity}
+                onMouseEnter={() => setHovered(z.rating)}
+                onMouseLeave={() =>
+                  setHovered((curr) => (curr === z.rating ? null : curr))
+                }
+                style={{ cursor: "pointer", transition: "opacity 120ms" }}
+                data-testid="gauge-zone"
+                data-zone={z.rating}
+              />
+            );
+          })}
 
-        <line
-          x1={CX}
-          y1={CY}
-          x2={nx}
-          y2={ny}
-          stroke="var(--text-primary)"
-          strokeWidth={2}
-          strokeLinecap="round"
-        />
-        <circle cx={CX} cy={CY} r={7} fill="var(--text-primary)" />
-        <circle cx={CX} cy={CY} r={3.5} fill="var(--bg-card)" />
-      </svg>
+          <line
+            x1={CX}
+            y1={CY}
+            x2={nx}
+            y2={ny}
+            stroke="var(--text-primary)"
+            strokeWidth={2}
+            strokeLinecap="round"
+            pointerEvents="none"
+          />
+          <circle
+            cx={CX}
+            cy={CY}
+            r={7}
+            fill="var(--text-primary)"
+            pointerEvents="none"
+          />
+          <circle
+            cx={CX}
+            cy={CY}
+            r={3.5}
+            fill="var(--bg-card)"
+            pointerEvents="none"
+          />
+        </svg>
+
+        {hovered && (
+          <div
+            className="absolute left-1/2 -translate-x-1/2 top-0 px-2.5 py-1 rounded-md text-xs whitespace-nowrap pointer-events-none"
+            style={{
+              backgroundColor: "var(--bg-card-raised)",
+              border: `1px solid color-mix(in srgb, var(--rating-${hovered}) 40%, var(--border-strong))`,
+              color: `var(--rating-${hovered})`,
+              fontWeight: 500,
+            }}
+            role="tooltip"
+            data-testid="gauge-zone-tooltip"
+          >
+            {RATING_LABELS[hovered]}
+          </div>
+        )}
+      </div>
 
       <div className="flex flex-col items-center -mt-1 gap-2">
         <div
