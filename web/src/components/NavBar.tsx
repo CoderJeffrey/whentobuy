@@ -14,7 +14,7 @@ export function NavBar({ asOf }: { asOf?: string }) {
         className="text-base tracking-label uppercase whitespace-nowrap"
         style={{ color: "var(--accent)", fontWeight: 500 }}
       >
-        Should I Buy Now?
+        IndicatorHub
       </h1>
       <div className="flex-1 flex justify-center">
         <SearchBar />

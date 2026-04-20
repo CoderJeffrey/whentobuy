@@ -191,7 +191,11 @@ export function IndicatorsSection({ data }: { data: DashboardResponse }) {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-3">
+              <div
+                className="flex flex-col gap-3 overflow-y-auto pr-1 tier-scroll"
+                style={{ maxHeight: "28rem" }}
+                data-testid={`tier-list-${tier}`}
+              >
                 {idsByTier[tier].length === 0 && (
                   <div
                     className="text-xs italic py-4 text-center"

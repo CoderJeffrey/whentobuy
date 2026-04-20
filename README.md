@@ -1,4 +1,4 @@
-# Should I Buy Now?
+# IndicatorHub
 
 Bare-bones v0 prototype: fetches 3 years of AAPL daily prices, computes RSI-14, SMA-200 and MACD, and displays a dashboard with a weighted "buy / hold / sell" rating.
 
