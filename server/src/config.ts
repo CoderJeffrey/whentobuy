@@ -15,9 +15,9 @@ const VALID_IDS = new Set<IndicatorId>(
 export const DEFAULT_CONFIG: UserConfig = {
   weights: {
     rsi_oversold: "high",
-    above_sma_200: "high",
+    bb_lower_touch: "medium",
     macd_bullish_cross: "medium",
-    golden_cross: "medium",
+    volume_spike: "medium",
     near_52w_low: "low",
   },
 };

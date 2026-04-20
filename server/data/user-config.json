@@ -1,7 +1,12 @@
 {
   "weights": {
-    "above_sma_20": "high",
+    "rsi_oversold": "high",
     "bb_lower_touch": "medium",
-    "macd_bullish_cross": "low"
+    "macd_bullish_cross": "medium",
+    "volume_spike": "medium",
+    "near_52w_low": "low",
+    "macd_positive": "medium",
+    "above_sma_200": "medium",
+    "above_sma_50": "medium"
   }
 }

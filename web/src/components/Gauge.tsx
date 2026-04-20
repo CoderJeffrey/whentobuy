@@ -1,3 +1,4 @@
+import { RATING_LABELS } from "../lib/ratings";
 import type { Rating } from "../types";
 
 interface GaugeProps {
@@ -14,14 +15,6 @@ const ZONES: { rating: Rating; from: number; to: number; color: string }[] = [
   { rating: "weak_buy", from: 60, to: 80, color: "var(--rating-weak_buy)" },
   { rating: "strong_buy", from: 80, to: 100, color: "var(--rating-strong_buy)" },
 ];
-
-const RATING_LABEL: Record<Rating, string> = {
-  strong_buy: "STRONG BUY",
-  weak_buy: "WEAK BUY",
-  hold: "HOLD",
-  weak_sell: "WEAK SELL",
-  immediate_sell: "IMMEDIATE SELL",
-};
 
 const CX = 150;
 const CY = 150;
@@ -73,7 +66,7 @@ export function Gauge({ percentage, rating, total, max }: GaugeProps) {
         width="300"
         height="180"
         role="img"
-        aria-label={`Gauge: ${RATING_LABEL[rating]}, ${clamped}%`}
+        aria-label={`Gauge: ${RATING_LABELS[rating]}, ${clamped}%`}
       >
         {ZONES.map((z) => (
           <path
@@ -99,11 +92,11 @@ export function Gauge({ percentage, rating, total, max }: GaugeProps) {
 
       <div className="flex flex-col items-center -mt-1 gap-2">
         <div
-          className="text-xl tracking-label uppercase"
+          className="text-2xl tracking-tight"
           style={{ color: ratingColor, fontWeight: 500 }}
           data-testid="gauge-rating"
         >
-          {RATING_LABEL[rating]}
+          {RATING_LABELS[rating]}
         </div>
         <div
           className="font-mono text-xs"
