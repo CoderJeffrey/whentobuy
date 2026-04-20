@@ -22,7 +22,15 @@ import type {
   PriceBar,
   PriceRow,
   SmaPoint,
+  WatchlistItem as WatchlistDisplayItem,
+  WatchlistResponse,
 } from "./types.js";
+import {
+  addToWatchlist,
+  loadWatchlist,
+  removeFromWatchlist,
+  WatchlistError,
+} from "./watchlist.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
 
@@ -153,6 +161,108 @@ async function buildDashboard(ticker: string): Promise<DashboardResponse> {
   };
 }
 
+async function isTickerDataReady(ticker: string): Promise<boolean> {
+  const db = await getDb();
+  const reader = await db.runAndReadAll(
+    `SELECT status FROM ticker_cache WHERE ticker = ${sqlLit(ticker)}`,
+  );
+  const rows = reader.getRowObjectsJS();
+  return rows.length > 0 && rows[0]!.status === "ok";
+}
+
+async function getWatchlistDisplayItem(
+  ticker: string,
+): Promise<WatchlistDisplayItem> {
+  const security = await getSecurity(ticker);
+  const name = security?.name ?? ticker;
+  const ready = await isTickerDataReady(ticker);
+  if (!ready) {
+    return { ticker, name, dataReady: false };
+  }
+
+  const db = await getDb();
+  const priceReader = await db.runAndReadAll(
+    `SELECT date, open, high, low, close, volume FROM prices
+     WHERE ticker = ${sqlLit(ticker)}
+     ORDER BY date DESC
+     LIMIT 2`,
+  );
+  const priceRows = priceReader.getRowObjectsJS();
+  if (priceRows.length === 0) {
+    return { ticker, name, dataReady: false };
+  }
+
+  const latest = priceRows[0]!;
+  const prev = priceRows[1];
+  const latestClose = asNumber(latest.close);
+  const priceChangePct = prev
+    ? ((latestClose - asNumber(prev.close)) / asNumber(prev.close)) * 100
+    : 0;
+
+  const indicatorReader = await db.runAndReadAll(
+    `SELECT date, rsi_14, sma_20, sma_50, sma_200, macd, macd_signal, macd_cross_up, bb_lower, pct_from_52w_low, volume_avg_20
+     FROM indicators WHERE ticker = ${sqlLit(ticker)} ORDER BY date ASC`,
+  );
+  const indicatorRows = indicatorReader.getRowObjectsJS();
+  if (indicatorRows.length === 0) {
+    return {
+      ticker,
+      name,
+      dataReady: true,
+      currentPrice: Number(latestClose.toFixed(2)),
+      priceChangePct: Number(priceChangePct.toFixed(2)),
+    };
+  }
+
+  const indicators: IndicatorRow[] = indicatorRows.map((r) => ({
+    date: toIsoDate(r.date),
+    rsi_14: asNullableNumber(r.rsi_14),
+    sma_20: asNullableNumber(r.sma_20),
+    sma_50: asNullableNumber(r.sma_50),
+    sma_200: asNullableNumber(r.sma_200),
+    macd: asNullableNumber(r.macd),
+    macd_signal: asNullableNumber(r.macd_signal),
+    macd_cross_up: asNullableBoolean(r.macd_cross_up),
+    bb_lower: asNullableNumber(r.bb_lower),
+    pct_from_52w_low: asNullableNumber(r.pct_from_52w_low),
+    volume_avg_20: asNullableNumber(r.volume_avg_20),
+  }));
+
+  const latestIndicator = indicators[indicators.length - 1]!;
+  const latestPriceRow: PriceRow = {
+    date: toIsoDate(latest.date),
+    open: asNumber(latest.open),
+    high: asNumber(latest.high),
+    low: asNumber(latest.low),
+    close: latestClose,
+    volume: asNumber(latest.volume),
+  };
+
+  const { weights } = loadConfig();
+  const score = scoreDashboard(
+    latestPriceRow,
+    latestIndicator,
+    indicators,
+    weights,
+  );
+
+  return {
+    ticker,
+    name,
+    dataReady: true,
+    currentPrice: Number(latestClose.toFixed(2)),
+    priceChangePct: Number(priceChangePct.toFixed(2)),
+    rating: score.rating,
+    percentage: score.percentage,
+  };
+}
+
+function kickBackfill(ticker: string): void {
+  ensureTickerData(ticker).catch((err) => {
+    console.warn(`[watchlist] backfill ${ticker} failed:`, err);
+  });
+}
+
 function sendBackfillError(res: express.Response, err: unknown): void {
   if (err instanceof TickerNotFoundError) {
     res.status(404).json({ error: err.message, code: "TICKER_NOT_FOUND" });
@@ -174,12 +284,13 @@ function sendBackfillError(res: express.Response, err: unknown): void {
 async function bootstrap(): Promise<void> {
   await getDb();
   await ensureSecuritiesLoaded();
-  try {
-    await ensureTickerData("AAPL");
-    console.log("[bootstrap] AAPL ready");
-  } catch (err) {
-    console.warn("[bootstrap] AAPL backfill failed:", err);
+  const watchlist = loadWatchlist();
+  for (const t of watchlist) {
+    kickBackfill(t);
   }
+  console.log(
+    `[bootstrap] kicked background backfill for ${watchlist.length} watchlist tickers`,
+  );
 }
 
 const app = express();
@@ -248,6 +359,83 @@ app.get("/api/config", (_req, res) => {
   } catch (err) {
     console.error("[/api/config GET] error:", err);
     res.status(500).json({ error: "failed to load config" });
+  }
+});
+
+app.get("/api/watchlist", async (_req, res) => {
+  try {
+    const tickers = loadWatchlist();
+    const items = await Promise.all(
+      tickers.map((t) => getWatchlistDisplayItem(t)),
+    );
+    const payload: WatchlistResponse = { tickers: items };
+    res.json(payload);
+  } catch (err) {
+    console.error("[/api/watchlist GET] error:", err);
+    res.status(500).json({ error: "failed to load watchlist" });
+  }
+});
+
+app.post("/api/watchlist", async (req, res) => {
+  try {
+    const raw = (req.body as { ticker?: unknown })?.ticker;
+    const sym = sanitizeTicker(raw);
+    const security = await getSecurity(sym);
+    if (!security) {
+      res
+        .status(404)
+        .json({ error: `Ticker not found: ${sym}`, code: "TICKER_NOT_FOUND" });
+      return;
+    }
+    const result = addToWatchlist(sym);
+    if (result.added) {
+      kickBackfill(result.ticker);
+    }
+    const items = await Promise.all(
+      result.tickers.map((t) => getWatchlistDisplayItem(t)),
+    );
+    const payload: WatchlistResponse & { added: boolean } = {
+      tickers: items,
+      added: result.added,
+    };
+    res.json(payload);
+  } catch (err) {
+    if (err instanceof TickerNotFoundError) {
+      res.status(400).json({ error: err.message, code: "TICKER_NOT_FOUND" });
+      return;
+    }
+    if (err instanceof WatchlistError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    console.error("[/api/watchlist POST] error:", err);
+    res.status(500).json({ error: "failed to add to watchlist" });
+  }
+});
+
+app.delete("/api/watchlist/:ticker", async (req, res) => {
+  try {
+    const sym = sanitizeTicker(req.params.ticker);
+    const result = removeFromWatchlist(sym);
+    const items = await Promise.all(
+      result.tickers.map((t) => getWatchlistDisplayItem(t)),
+    );
+    const payload: WatchlistResponse & { removed: boolean } = {
+      tickers: items,
+      removed: result.removed,
+    };
+    res.json(payload);
+  } catch (err) {
+    if (err instanceof TickerNotFoundError) {
+      res.status(400).json({ error: err.message, code: "TICKER_NOT_FOUND" });
+      return;
+    }
+    if (err instanceof WatchlistError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    console.error("[/api/watchlist DELETE] error:", err);
+    res.status(500).json({ error: "failed to remove from watchlist" });
   }
 });
 
