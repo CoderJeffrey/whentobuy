@@ -64,8 +64,10 @@ export function IndicatorsSection({ data }: { data: DashboardResponse }) {
     applyWeights(next);
   }
 
-  function addIndicator(id: IndicatorId, tier: Tier) {
-    applyWeights({ ...weights, [id]: tier });
+  function addIndicators(ids: IndicatorId[], tier: Tier) {
+    const next: UserWeights = { ...weights };
+    for (const id of ids) next[id] = tier;
+    applyWeights(next);
     setPickerOpen(false);
   }
 
@@ -248,7 +250,7 @@ export function IndicatorsSection({ data }: { data: DashboardResponse }) {
         <IndicatorPicker
           indicators={indicatorsQ.data ?? []}
           usedIds={usedIds}
-          onPick={addIndicator}
+          onAdd={addIndicators}
           onClose={() => setPickerOpen(false)}
         />
       )}
