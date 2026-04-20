@@ -91,6 +91,20 @@ export interface Security {
   cik?: number | null;
 }
 
+export interface WatchlistItem {
+  ticker: string;
+  name: string;
+  dataReady: boolean;
+  currentPrice?: number;
+  priceChangePct?: number;
+  rating?: Rating;
+  percentage?: number;
+}
+
+export interface WatchlistResponse {
+  tickers: WatchlistItem[];
+}
+
 export type ApiErrorCode =
   | "TICKER_NOT_FOUND"
   | "RATE_LIMITED"

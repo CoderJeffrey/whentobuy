@@ -4,6 +4,7 @@ import type {
   IndicatorMeta,
   Security,
   UserConfig,
+  WatchlistResponse,
 } from "../types";
 import { ApiError } from "../types";
 
@@ -67,6 +68,36 @@ export async function searchSecurities(
     `/api/search?q=${encodeURIComponent(q)}&limit=10`,
     { signal },
   );
+  if (!res.ok) throw await readError(res);
+  return res.json();
+}
+
+export async function fetchWatchlist(
+  signal?: AbortSignal,
+): Promise<WatchlistResponse> {
+  const res = await fetch("/api/watchlist", { signal });
+  if (!res.ok) throw await readError(res);
+  return res.json();
+}
+
+export async function addWatchlistTicker(
+  ticker: string,
+): Promise<WatchlistResponse & { added: boolean }> {
+  const res = await fetch("/api/watchlist", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ticker }),
+  });
+  if (!res.ok) throw await readError(res);
+  return res.json();
+}
+
+export async function removeWatchlistTicker(
+  ticker: string,
+): Promise<WatchlistResponse & { removed: boolean }> {
+  const res = await fetch(`/api/watchlist/${encodeURIComponent(ticker)}`, {
+    method: "DELETE",
+  });
   if (!res.ok) throw await readError(res);
   return res.json();
 }
