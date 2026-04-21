@@ -10,13 +10,7 @@ function formatLastUpdated(asOf: string | undefined): string {
 export function NavBar({ asOf }: { asOf?: string }) {
   return (
     <header className="flex items-center gap-4 py-6">
-      <h1
-        className="text-base tracking-label uppercase whitespace-nowrap"
-        style={{ color: "var(--accent)", fontWeight: 500 }}
-      >
-        IndicatorHub
-      </h1>
-      <div className="flex-1 flex justify-center">
+      <div className="flex-1 flex">
         <SearchBar />
       </div>
       <div

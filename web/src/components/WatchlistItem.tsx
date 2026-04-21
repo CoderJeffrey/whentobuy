@@ -103,7 +103,7 @@ export function WatchlistItem({ item, active, onRemove, removing }: Props) {
         </div>
       ) : (
         <Link
-          to={`/ticker/${item.ticker}`}
+          to={`/dashboard/${item.ticker}`}
           className="block px-3 py-2.5"
           data-testid="watchlist-item-link"
         >

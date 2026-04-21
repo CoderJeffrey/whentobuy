@@ -13,6 +13,7 @@
     "@fontsource/ibm-plex-mono": "^5.2.7",
     "@tanstack/react-query": "^5.99.0",
     "lightweight-charts": "^5.1.0",
+    "lucide-react": "^1.8.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.14.1"
