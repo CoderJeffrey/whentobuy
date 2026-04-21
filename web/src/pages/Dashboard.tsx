@@ -21,41 +21,39 @@ export default function Dashboard() {
   });
 
   return (
-    <div className="min-h-screen">
-      <div className="max-w-7xl mx-auto px-6">
-        <NavBar asOf={data?.asOf} />
+    <div className="max-w-7xl mx-auto px-6">
+      <NavBar asOf={data?.asOf} />
 
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-6 pb-12">
-          <main className="min-w-0">
-            {isPending && <TickerLoading ticker={ticker} />}
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_280px] xl:grid-cols-[1fr_300px] gap-6 pb-12">
+        <main className="min-w-0">
+          {isPending && <TickerLoading ticker={ticker} />}
 
-            {!isPending && error && (
-              <TickerError
-                ticker={ticker}
-                error={error}
-                onRetry={() => refetch()}
+          {!isPending && error && (
+            <TickerError
+              ticker={ticker}
+              error={error}
+              onRetry={() => refetch()}
+            />
+          )}
+
+          {data && !error && (
+            <div
+              className="flex flex-col gap-8"
+              data-testid="dashboard-loaded"
+              data-fetching={isFetching ? "true" : "false"}
+            >
+              <ScoreCard data={data} />
+              <IndicatorsSection data={data} />
+              <PriceChart
+                priceHistory={data.priceHistory}
+                sma200Series={data.sma200Series}
               />
-            )}
+            </div>
+          )}
+        </main>
 
-            {data && !error && (
-              <div
-                className="flex flex-col gap-8"
-                data-testid="dashboard-loaded"
-                data-fetching={isFetching ? "true" : "false"}
-              >
-                <ScoreCard data={data} />
-                <IndicatorsSection data={data} />
-                <PriceChart
-                  priceHistory={data.priceHistory}
-                  sma200Series={data.sma200Series}
-                />
-              </div>
-            )}
-          </main>
-
-          <div className="hidden md:block xl:sticky xl:top-4 xl:self-start">
-            <Watchlist activeTicker={ticker} />
-          </div>
+        <div className="md:sticky md:top-4 md:self-start">
+          <Watchlist activeTicker={ticker} />
         </div>
       </div>
     </div>

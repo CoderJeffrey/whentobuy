@@ -44,7 +44,7 @@ export function SearchBar() {
     setOpen(false);
     setQ("");
     setDebounced("");
-    navigate(`/ticker/${sec.ticker}`);
+    navigate(`/dashboard/${sec.ticker}`);
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {

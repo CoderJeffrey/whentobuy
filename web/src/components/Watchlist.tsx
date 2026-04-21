@@ -61,7 +61,7 @@ export function Watchlist({ activeTicker }: Props) {
         flashNotice(`${ticker} removed`);
         if (wasActive) {
           const next = data.tickers[0]?.ticker ?? "AAPL";
-          navigate(`/ticker/${next}`);
+          navigate(`/dashboard/${next}`);
         }
       },
       onError: (err) => {
