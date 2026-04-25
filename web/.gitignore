@@ -23,12 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 
-# Environment variables
+# Environment variables — never commit any variant
 .env
-.env.local
-.env.*.local
-.env.development
-.env.production
-
-# Keep example file tracked
-!.env.example
+.env.*

@@ -1,10 +1,10 @@
 node_modules/
 dist/
 build/
+# env files — never commit any variant
 .env
-.env.local
-.env.development
-.env.production
+.env.*
+!.gitkeep
 server/data/*.db
 server/data/*.db.wal
 *.log
