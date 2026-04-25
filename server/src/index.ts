@@ -1,7 +1,21 @@
 import "dotenv/config";
+
+if (
+  process.env.NODE_ENV === "production" &&
+  process.env.DEV_AUTO_LOGIN === "true"
+) {
+  console.error(
+    "FATAL: DEV_AUTO_LOGIN is true in production. Refusing to start.",
+  );
+  process.exit(1);
+}
+
 import cors from "cors";
 import express from "express";
 import { ConfigError, loadConfig, saveConfig } from "./config.js";
+import { requireAuth, type AuthedRequest } from "./middleware/auth.js";
+import { ensureDevUser, migrateDevUserJsonFiles } from "./services/dev-user.js";
+import { isDevAutoLogin } from "./supabase.js";
 import { getDb } from "./db.js";
 import { INDICATOR_METADATA } from "./indicator-registry.js";
 import { scoreDashboard } from "./scoring.js";
@@ -76,7 +90,10 @@ function sanitizeTicker(input: unknown): string {
   return s;
 }
 
-async function buildDashboard(ticker: string): Promise<DashboardResponse> {
+async function buildDashboard(
+  userId: string,
+  ticker: string,
+): Promise<DashboardResponse> {
   const sym = sanitizeTicker(ticker);
   await ensureTickerData(sym);
 
@@ -140,7 +157,7 @@ async function buildDashboard(ticker: string): Promise<DashboardResponse> {
     volume: latest.volume,
   };
 
-  const { weights } = loadConfig();
+  const { weights } = await loadConfig(userId);
   const score = scoreDashboard(
     latestPriceRow,
     latestIndicator,
@@ -171,6 +188,7 @@ async function isTickerDataReady(ticker: string): Promise<boolean> {
 }
 
 async function getWatchlistDisplayItem(
+  userId: string,
   ticker: string,
 ): Promise<WatchlistDisplayItem> {
   const security = await getSecurity(ticker);
@@ -238,7 +256,7 @@ async function getWatchlistDisplayItem(
     volume: asNumber(latest.volume),
   };
 
-  const { weights } = loadConfig();
+  const { weights } = await loadConfig(userId);
   const score = scoreDashboard(
     latestPriceRow,
     latestIndicator,
@@ -284,13 +302,27 @@ function sendBackfillError(res: express.Response, err: unknown): void {
 async function bootstrap(): Promise<void> {
   await getDb();
   await ensureSecuritiesLoaded();
-  const watchlist = loadWatchlist();
-  for (const t of watchlist) {
-    kickBackfill(t);
+
+  if (isDevAutoLogin()) {
+    try {
+      const devId = await ensureDevUser();
+      await migrateDevUserJsonFiles(devId);
+      const watchlist = await loadWatchlist(devId);
+      for (const t of watchlist) {
+        kickBackfill(t);
+      }
+      console.log(
+        `[bootstrap] dev mode: kicked backfill for ${watchlist.length} dev watchlist tickers`,
+      );
+    } catch (err) {
+      console.warn(
+        "[bootstrap] dev-user init failed (Supabase reachable?):",
+        err,
+      );
+    }
+  } else {
+    console.log("[bootstrap] auth required; skipping dev-user warmup");
   }
-  console.log(
-    `[bootstrap] kicked background backfill for ${watchlist.length} watchlist tickers`,
-  );
 }
 
 const app = express();
@@ -301,11 +333,21 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/dashboard", async (req, res) => {
+app.use("/api", requireAuth);
+
+app.get("/api/me", (req: AuthedRequest, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  res.json({ id: req.user.id, email: req.user.email });
+});
+
+app.get("/api/dashboard", async (req: AuthedRequest, res) => {
   const tickerParam =
     typeof req.query.ticker === "string" ? req.query.ticker : "AAPL";
   try {
-    const payload = await buildDashboard(tickerParam);
+    const payload = await buildDashboard(req.user!.id, tickerParam);
     res.json(payload);
   } catch (err) {
     if (
@@ -353,20 +395,21 @@ app.get("/api/indicators", (_req, res) => {
   res.json(INDICATOR_METADATA);
 });
 
-app.get("/api/config", (_req, res) => {
+app.get("/api/config", async (req: AuthedRequest, res) => {
   try {
-    res.json(loadConfig());
+    res.json(await loadConfig(req.user!.id));
   } catch (err) {
     console.error("[/api/config GET] error:", err);
     res.status(500).json({ error: "failed to load config" });
   }
 });
 
-app.get("/api/watchlist", async (_req, res) => {
+app.get("/api/watchlist", async (req: AuthedRequest, res) => {
   try {
-    const tickers = loadWatchlist();
+    const userId = req.user!.id;
+    const tickers = await loadWatchlist(userId);
     const items = await Promise.all(
-      tickers.map((t) => getWatchlistDisplayItem(t)),
+      tickers.map((t) => getWatchlistDisplayItem(userId, t)),
     );
     const payload: WatchlistResponse = { tickers: items };
     res.json(payload);
@@ -376,8 +419,9 @@ app.get("/api/watchlist", async (_req, res) => {
   }
 });
 
-app.post("/api/watchlist", async (req, res) => {
+app.post("/api/watchlist", async (req: AuthedRequest, res) => {
   try {
+    const userId = req.user!.id;
     const raw = (req.body as { ticker?: unknown })?.ticker;
     const sym = sanitizeTicker(raw);
     const security = await getSecurity(sym);
@@ -387,12 +431,12 @@ app.post("/api/watchlist", async (req, res) => {
         .json({ error: `Ticker not found: ${sym}`, code: "TICKER_NOT_FOUND" });
       return;
     }
-    const result = addToWatchlist(sym);
+    const result = await addToWatchlist(userId, sym);
     if (result.added) {
       kickBackfill(result.ticker);
     }
     const items = await Promise.all(
-      result.tickers.map((t) => getWatchlistDisplayItem(t)),
+      result.tickers.map((t) => getWatchlistDisplayItem(userId, t)),
     );
     const payload: WatchlistResponse & { added: boolean } = {
       tickers: items,
@@ -413,12 +457,13 @@ app.post("/api/watchlist", async (req, res) => {
   }
 });
 
-app.delete("/api/watchlist/:ticker", async (req, res) => {
+app.delete("/api/watchlist/:ticker", async (req: AuthedRequest, res) => {
   try {
+    const userId = req.user!.id;
     const sym = sanitizeTicker(req.params.ticker);
-    const result = removeFromWatchlist(sym);
+    const result = await removeFromWatchlist(userId, sym);
     const items = await Promise.all(
-      result.tickers.map((t) => getWatchlistDisplayItem(t)),
+      result.tickers.map((t) => getWatchlistDisplayItem(userId, t)),
     );
     const payload: WatchlistResponse & { removed: boolean } = {
       tickers: items,
@@ -439,9 +484,9 @@ app.delete("/api/watchlist/:ticker", async (req, res) => {
   }
 });
 
-app.put("/api/config", (req, res) => {
+app.put("/api/config", async (req: AuthedRequest, res) => {
   try {
-    const saved = saveConfig(req.body);
+    const saved = await saveConfig(req.user!.id, req.body);
     res.json(saved);
   } catch (err) {
     if (err instanceof ConfigError) {
