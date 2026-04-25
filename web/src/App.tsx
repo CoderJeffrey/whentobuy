@@ -1,7 +1,9 @@
 import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { AppLayout } from "./layouts/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import Indicators from "./pages/Indicators";
+import Login from "./pages/Login";
 import Mail from "./pages/Mail";
 import Settings from "./pages/Settings";
 
@@ -11,7 +13,26 @@ function LegacyTickerRedirect() {
   return <Navigate to={target} replace />;
 }
 
-export default function App() {
+function FullPageLoader() {
+  return (
+    <div
+      className="min-h-screen flex items-center justify-center"
+      style={{ backgroundColor: "var(--bg-page)" }}
+    >
+      <span
+        className="text-sm"
+        style={{ color: "var(--text-secondary)" }}
+      >
+        Loading…
+      </span>
+    </div>
+  );
+}
+
+function ProtectedApp() {
+  const { user, loading } = useAuth();
+  if (loading) return <FullPageLoader />;
+  if (!user) return <Login />;
   return (
     <BrowserRouter>
       <Routes>
@@ -27,5 +48,13 @@ export default function App() {
         </Route>
       </Routes>
     </BrowserRouter>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <ProtectedApp />
+    </AuthProvider>
   );
 }

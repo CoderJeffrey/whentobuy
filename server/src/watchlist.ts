@@ -1,26 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-
-const WATCHLIST_PATH = resolve(
-  process.env.WATCHLIST_PATH ?? "./data/watchlist.json",
-);
+import { getSupabaseAdmin } from "./supabase.js";
 
 export const DEFAULT_WATCHLIST: string[] = ["AAPL", "TSLA", "HOOD"];
-
-interface WatchlistFile {
-  tickers: string[];
-}
-
-function ensureDir(): void {
-  const dir = dirname(WATCHLIST_PATH);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-}
-
-function write(tickers: string[]): void {
-  ensureDir();
-  const payload: WatchlistFile = { tickers };
-  writeFileSync(WATCHLIST_PATH, JSON.stringify(payload, null, 2));
-}
 
 function normalizeTicker(input: unknown): string | null {
   if (typeof input !== "string") return null;
@@ -29,18 +9,11 @@ function normalizeTicker(input: unknown): string | null {
   return /^[A-Z][A-Z0-9.\-]{0,9}$/.test(s) ? s : null;
 }
 
-function parse(raw: string): string[] {
-  const parsed = JSON.parse(raw) as unknown;
-  if (!parsed || typeof parsed !== "object") {
-    throw new WatchlistError("watchlist file malformed: not an object");
-  }
-  const list = (parsed as { tickers?: unknown }).tickers;
-  if (!Array.isArray(list)) {
-    throw new WatchlistError("watchlist file malformed: tickers not an array");
-  }
+function dedupe(tickers: unknown): string[] {
+  if (!Array.isArray(tickers)) return [];
   const out: string[] = [];
   const seen = new Set<string>();
-  for (const item of list) {
+  for (const item of tickers) {
     const t = normalizeTicker(item);
     if (!t || seen.has(t)) continue;
     seen.add(t);
@@ -49,52 +22,70 @@ function parse(raw: string): string[] {
   return out;
 }
 
-export function loadWatchlist(): string[] {
-  ensureDir();
-  if (!existsSync(WATCHLIST_PATH)) {
-    write(DEFAULT_WATCHLIST);
-    return [...DEFAULT_WATCHLIST];
+async function readRow(userId: string): Promise<string[] | null> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("user_watchlists")
+    .select("tickers")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) {
+    throw new WatchlistError(`failed to read watchlist: ${error.message}`);
   }
-  try {
-    return parse(readFileSync(WATCHLIST_PATH, "utf8"));
-  } catch (err) {
-    console.warn(
-      `[watchlist] failed to load (${String(err)}); resetting to defaults`,
+  if (!data) return null;
+  return dedupe(data.tickers);
+}
+
+async function writeRow(userId: string, tickers: string[]): Promise<void> {
+  const { error } = await getSupabaseAdmin()
+    .from("user_watchlists")
+    .upsert(
+      {
+        user_id: userId,
+        tickers,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
     );
-    write(DEFAULT_WATCHLIST);
-    return [...DEFAULT_WATCHLIST];
+  if (error) {
+    throw new WatchlistError(`failed to save watchlist: ${error.message}`);
   }
 }
 
-export function addToWatchlist(ticker: string): {
-  tickers: string[];
-  added: boolean;
-  ticker: string;
-} {
+export async function loadWatchlist(userId: string): Promise<string[]> {
+  const existing = await readRow(userId);
+  if (existing) return existing;
+  const seeded = [...DEFAULT_WATCHLIST];
+  await writeRow(userId, seeded);
+  return seeded;
+}
+
+export async function addToWatchlist(
+  userId: string,
+  ticker: string,
+): Promise<{ tickers: string[]; added: boolean; ticker: string }> {
   const sym = normalizeTicker(ticker);
   if (!sym) throw new WatchlistError(`invalid ticker: ${String(ticker)}`);
-  const current = loadWatchlist();
+  const current = await loadWatchlist(userId);
   if (current.includes(sym)) {
     return { tickers: current, added: false, ticker: sym };
   }
   const next = [...current, sym];
-  write(next);
+  await writeRow(userId, next);
   return { tickers: next, added: true, ticker: sym };
 }
 
-export function removeFromWatchlist(ticker: string): {
-  tickers: string[];
-  removed: boolean;
-  ticker: string;
-} {
+export async function removeFromWatchlist(
+  userId: string,
+  ticker: string,
+): Promise<{ tickers: string[]; removed: boolean; ticker: string }> {
   const sym = normalizeTicker(ticker);
   if (!sym) throw new WatchlistError(`invalid ticker: ${String(ticker)}`);
-  const current = loadWatchlist();
+  const current = await loadWatchlist(userId);
   if (!current.includes(sym)) {
     return { tickers: current, removed: false, ticker: sym };
   }
   const next = current.filter((t) => t !== sym);
-  write(next);
+  await writeRow(userId, next);
   return { tickers: next, removed: true, ticker: sym };
 }
 

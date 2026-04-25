@@ -3,6 +3,8 @@ dist/
 build/
 .env
 .env.local
+.env.development
+.env.production
 server/data/*.db
 server/data/*.db.wal
 *.log

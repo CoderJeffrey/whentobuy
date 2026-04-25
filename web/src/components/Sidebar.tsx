@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { SidebarItem } from "./SidebarItem";
+import { UserMenu } from "./UserMenu";
 
 export function Sidebar() {
   return (
@@ -52,7 +53,8 @@ export function Sidebar() {
         <SidebarItem to="/mail" label="Mail" icon={Mail} />
       </nav>
 
-      <div className="mt-auto flex flex-col gap-1">
+      <div className="mt-auto flex flex-col gap-2">
+        <UserMenu />
         <SidebarItem to="/settings" label="Settings" icon={Settings} />
       </div>
     </aside>

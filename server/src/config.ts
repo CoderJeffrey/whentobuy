@@ -1,11 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
 import { INDICATOR_REGISTRY } from "./indicator-registry.js";
+import { getSupabaseAdmin } from "./supabase.js";
 import type { IndicatorId, Tier, UserConfig, UserWeights } from "./types.js";
-
-const CONFIG_PATH = resolve(
-  process.env.CONFIG_PATH ?? "./data/user-config.json",
-);
 
 const VALID_TIERS: Tier[] = ["high", "medium", "low"];
 const VALID_IDS = new Set<IndicatorId>(
@@ -22,33 +17,47 @@ export const DEFAULT_CONFIG: UserConfig = {
   },
 };
 
-function ensureDir(): void {
-  const dir = dirname(CONFIG_PATH);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-}
-
-export function loadConfig(): UserConfig {
-  ensureDir();
-  if (!existsSync(CONFIG_PATH)) {
-    writeFileSync(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG, null, 2));
+export async function loadConfig(userId: string): Promise<UserConfig> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("user_configs")
+    .select("weights")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) {
+    console.warn(
+      `[config] failed to load config for ${userId}: ${error.message}; falling back to defaults`,
+    );
     return DEFAULT_CONFIG;
   }
+  if (!data) return DEFAULT_CONFIG;
   try {
-    const raw = readFileSync(CONFIG_PATH, "utf8");
-    const parsed = JSON.parse(raw) as unknown;
-    return validateConfig(parsed);
+    return validateConfig({ weights: data.weights });
   } catch (err) {
     console.warn(
-      `[config] failed to load user config (${String(err)}); falling back to defaults`,
+      `[config] stored config for ${userId} invalid (${String(err)}); falling back to defaults`,
     );
     return DEFAULT_CONFIG;
   }
 }
 
-export function saveConfig(config: UserConfig): UserConfig {
-  ensureDir();
+export async function saveConfig(
+  userId: string,
+  config: UserConfig,
+): Promise<UserConfig> {
   const validated = validateConfig(config);
-  writeFileSync(CONFIG_PATH, JSON.stringify(validated, null, 2));
+  const { error } = await getSupabaseAdmin()
+    .from("user_configs")
+    .upsert(
+      {
+        user_id: userId,
+        weights: validated.weights,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
+    );
+  if (error) {
+    throw new ConfigError(`failed to save config: ${error.message}`);
+  }
   return validated;
 }
 
