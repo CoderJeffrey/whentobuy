@@ -1,6 +1,6 @@
 import { getSupabaseAdmin } from "./supabase.js";
 
-export const DEFAULT_WATCHLIST: string[] = ["AAPL", "TSLA", "HOOD"];
+export const DEFAULT_WATCHLIST: string[] = ["AAPL", "TSLA", "HOOD", "BE"];
 
 function normalizeTicker(input: unknown): string | null {
   if (typeof input !== "string") return null;

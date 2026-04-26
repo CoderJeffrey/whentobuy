@@ -20,6 +20,8 @@ export function useWatchlist() {
     queryFn: ({ signal }) => fetchWatchlist(signal),
     staleTime: 30_000,
     refetchOnWindowFocus: true,
+    refetchInterval: (q) =>
+      q.state.data?.tickers.some((t) => !t.dataReady) ? 3000 : false,
   });
 
   const add = useMutation({
