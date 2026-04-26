@@ -10,6 +10,8 @@ if (
   process.exit(1);
 }
 
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import cors from "cors";
 import express from "express";
 import { ConfigError, loadConfig, saveConfig } from "./config.js";
@@ -497,6 +499,20 @@ app.put("/api/config", async (req: AuthedRequest, res) => {
     res.status(500).json({ error: "failed to save config" });
   }
 });
+
+if (process.env.NODE_ENV === "production") {
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const frontendPath = path.resolve(__dirname, "../../web/dist");
+  app.use(express.static(frontendPath));
+  app.get("*", (req, res) => {
+    if (req.path.startsWith("/api")) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    res.sendFile(path.join(frontendPath, "index.html"));
+  });
+  console.log(`[server] serving SPA from ${frontendPath}`);
+}
 
 bootstrap()
   .catch((err) => {
