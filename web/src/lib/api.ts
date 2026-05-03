@@ -120,3 +120,34 @@ export async function removeWatchlistTicker(
   if (!res.ok) throw await readError(res);
   return res.json();
 }
+
+export interface UserPreferences {
+  newsletter_enabled: boolean;
+}
+
+export async function fetchPreferences(): Promise<UserPreferences> {
+  const res = await fetchWithAuth("/api/preferences");
+  if (!res.ok) throw await readError(res);
+  return res.json();
+}
+
+export async function savePreferences(
+  prefs: UserPreferences,
+): Promise<UserPreferences> {
+  const res = await fetchWithAuth("/api/preferences", {
+    method: "PUT",
+    body: JSON.stringify(prefs),
+  });
+  if (!res.ok) throw await readError(res);
+  return res.json();
+}
+
+export async function unsubscribeWithToken(
+  token: string,
+): Promise<{ ok: boolean }> {
+  const res = await fetch(
+    `/api/unsubscribe?token=${encodeURIComponent(token)}`,
+  );
+  if (!res.ok) throw await readError(res);
+  return res.json();
+}

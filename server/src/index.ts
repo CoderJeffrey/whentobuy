@@ -47,6 +47,11 @@ import {
   removeFromWatchlist,
   WatchlistError,
 } from "./watchlist.js";
+import {
+  findByUnsubscribeToken,
+  getPreferences,
+  setNewsletterEnabled,
+} from "./services/preferences.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
 
@@ -335,6 +340,34 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
 });
 
+async function handleUnsubscribe(
+  req: express.Request,
+  res: express.Response,
+): Promise<void> {
+  const token = typeof req.query.token === "string" ? req.query.token : "";
+  if (!token) {
+    res.status(400).json({ error: "missing token" });
+    return;
+  }
+  try {
+    const pref = await findByUnsubscribeToken(token);
+    if (!pref) {
+      res.status(404).json({ error: "invalid token" });
+      return;
+    }
+    if (pref.newsletterEnabled) {
+      await setNewsletterEnabled(pref.userId, false);
+    }
+    res.json({ ok: true, unsubscribed: true });
+  } catch (err) {
+    console.error("[/api/unsubscribe] error:", err);
+    res.status(500).json({ error: "failed to unsubscribe" });
+  }
+}
+
+app.get("/api/unsubscribe", handleUnsubscribe);
+app.post("/api/unsubscribe", handleUnsubscribe);
+
 app.use("/api", requireAuth);
 
 app.get("/api/me", (req: AuthedRequest, res) => {
@@ -483,6 +516,36 @@ app.delete("/api/watchlist/:ticker", async (req: AuthedRequest, res) => {
     }
     console.error("[/api/watchlist DELETE] error:", err);
     res.status(500).json({ error: "failed to remove from watchlist" });
+  }
+});
+
+app.get("/api/preferences", async (req: AuthedRequest, res) => {
+  try {
+    const prefs = await getPreferences(req.user!.id);
+    res.json({ newsletter_enabled: prefs.newsletterEnabled });
+  } catch (err) {
+    console.error("[/api/preferences GET] error:", err);
+    res.status(500).json({ error: "failed to load preferences" });
+  }
+});
+
+app.put("/api/preferences", async (req: AuthedRequest, res) => {
+  try {
+    const body = req.body as { newsletter_enabled?: unknown };
+    if (typeof body?.newsletter_enabled !== "boolean") {
+      res
+        .status(400)
+        .json({ error: "newsletter_enabled (boolean) is required" });
+      return;
+    }
+    const prefs = await setNewsletterEnabled(
+      req.user!.id,
+      body.newsletter_enabled,
+    );
+    res.json({ newsletter_enabled: prefs.newsletterEnabled });
+  } catch (err) {
+    console.error("[/api/preferences PUT] error:", err);
+    res.status(500).json({ error: "failed to save preferences" });
   }
 });
 
