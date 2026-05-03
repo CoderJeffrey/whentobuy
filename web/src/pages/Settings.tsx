@@ -83,12 +83,35 @@ function Toggle({
   );
 }
 
+const NEWSLETTER_CACHE_KEY = "newsletter_enabled_cache_v1";
+
+function readCachedEnabled(): boolean | null {
+  try {
+    const v = sessionStorage.getItem(NEWSLETTER_CACHE_KEY);
+    if (v === "true") return true;
+    if (v === "false") return false;
+  } catch {
+    // sessionStorage may be unavailable
+  }
+  return null;
+}
+
+function writeCachedEnabled(value: boolean): void {
+  try {
+    sessionStorage.setItem(NEWSLETTER_CACHE_KEY, String(value));
+  } catch {
+    // ignore
+  }
+}
+
 function NewsletterToggle({
   setToast,
 }: {
   setToast: (t: Toast | null) => void;
 }) {
-  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [enabled, setEnabled] = useState<boolean | null>(() =>
+    readCachedEnabled(),
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,6 +121,7 @@ function NewsletterToggle({
       .then((p) => {
         if (!active) return;
         setEnabled(p.newsletter_enabled);
+        writeCachedEnabled(p.newsletter_enabled);
       })
       .catch((err) => {
         if (!active) return;
@@ -112,10 +136,12 @@ function NewsletterToggle({
     if (saving) return;
     const prev = enabled;
     setEnabled(next);
+    writeCachedEnabled(next);
     setSaving(true);
     try {
       const result = await savePreferences({ newsletter_enabled: next });
       setEnabled(result.newsletter_enabled);
+      writeCachedEnabled(result.newsletter_enabled);
       setToast({
         message: result.newsletter_enabled
           ? "Daily emails enabled"
@@ -124,6 +150,7 @@ function NewsletterToggle({
       });
     } catch (err) {
       setEnabled(prev);
+      if (prev !== null) writeCachedEnabled(prev);
       setToast({
         message: err instanceof Error ? err.message : "Failed to save",
         kind: "error",
@@ -157,12 +184,26 @@ function NewsletterToggle({
           </p>
         )}
       </div>
-      <Toggle
-        on={enabled === true}
-        disabled={enabled === null || saving}
-        onChange={onChange}
-        ariaLabel="Toggle daily watchlist email"
-      />
+      {enabled === null ? (
+        <div
+          aria-hidden
+          style={{
+            width: "40px",
+            height: "22px",
+            borderRadius: "999px",
+            backgroundColor: "var(--bg-card-raised)",
+            border: "1px solid var(--border-strong)",
+            opacity: 0.5,
+          }}
+        />
+      ) : (
+        <Toggle
+          on={enabled}
+          disabled={saving}
+          onChange={onChange}
+          ariaLabel="Toggle daily watchlist email"
+        />
+      )}
     </div>
   );
 }
