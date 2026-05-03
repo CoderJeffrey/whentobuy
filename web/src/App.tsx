@@ -6,6 +6,7 @@ import Indicators from "./pages/Indicators";
 import Login from "./pages/Login";
 import Mail from "./pages/Mail";
 import Settings from "./pages/Settings";
+import Unsubscribe from "./pages/Unsubscribe";
 
 function LegacyTickerRedirect() {
   const { symbol } = useParams<{ symbol: string }>();
@@ -29,32 +30,35 @@ function FullPageLoader() {
   );
 }
 
-function ProtectedApp() {
+function ProtectedRoutes() {
   const { user, loading } = useAuth();
   if (loading) return <FullPageLoader />;
   if (!user) return <Login />;
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route element={<AppLayout />}>
-          <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/dashboard/:symbol" element={<Dashboard />} />
-          <Route path="/indicators" element={<Indicators />} />
-          <Route path="/mail" element={<Mail />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/ticker/:symbol" element={<LegacyTickerRedirect />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <Routes>
+      <Route element={<AppLayout />}>
+        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/dashboard/:symbol" element={<Dashboard />} />
+        <Route path="/indicators" element={<Indicators />} />
+        <Route path="/mail" element={<Mail />} />
+        <Route path="/settings" element={<Settings />} />
+        <Route path="/ticker/:symbol" element={<LegacyTickerRedirect />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Route>
+    </Routes>
   );
 }
 
 export default function App() {
   return (
     <AuthProvider>
-      <ProtectedApp />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/unsubscribe" element={<Unsubscribe />} />
+          <Route path="*" element={<ProtectedRoutes />} />
+        </Routes>
+      </BrowserRouter>
     </AuthProvider>
   );
 }
