@@ -15,31 +15,42 @@ import {
 import * as React from "react";
 import type { Rating } from "../types.js";
 
-export interface EmailTickerData {
+export interface EmailTickerReady {
   ticker: string;
   name: string;
+  dataReady: true;
   currentPrice: number;
   priceChange: number;
   priceChangePct: number;
   percentage: number;
   rating: Rating;
-  triggeredCount: number;
-  totalCount: number;
+  scoreTotal: number;
+  scoreMax: number;
 }
+
+export interface EmailTickerPending {
+  ticker: string;
+  name: string;
+  dataReady: false;
+}
+
+export type EmailTickerData = EmailTickerReady | EmailTickerPending;
 
 export interface DailyDigestProps {
   tickers: EmailTickerData[];
   unsubscribeUrl: string;
   appUrl: string;
   dateLabel: string;
+  /** Total watchlist size; when > tickers.length we add an "Explore more" CTA. */
+  watchlistTotal?: number;
 }
 
 const RATING_LABELS: Record<Rating, string> = {
-  immediate_sell: "DON'T BUY",
-  weak_sell: "PROBABLY NOT",
-  hold: "HOLD",
-  weak_buy: "WORTH CONSIDERING",
-  strong_buy: "STRONG BUY",
+  immediate_sell: "Don't Buy",
+  weak_sell: "Probably Not",
+  hold: "Hold",
+  weak_buy: "Weak Buy",
+  strong_buy: "Strong Buy",
 };
 
 const SEGMENT_COLORS: Record<Rating, string> = {
@@ -49,14 +60,6 @@ const SEGMENT_COLORS: Record<Rating, string> = {
   weak_buy: "#6b8a6d",
   strong_buy: "#4c7a57",
 };
-
-const SEGMENTS: Rating[] = [
-  "immediate_sell",
-  "weak_sell",
-  "hold",
-  "weak_buy",
-  "strong_buy",
-];
 
 const COLORS = {
   bgPage: "#0F0F0E",
@@ -77,92 +80,52 @@ const FONT_BODY =
   "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
 const FONT_MONO = "'SF Mono', Monaco, 'Courier New', monospace";
 
-function activeSegmentIndex(percentage: number): number {
-  if (percentage >= 80) return 4;
-  if (percentage >= 60) return 3;
-  if (percentage >= 40) return 2;
-  if (percentage >= 20) return 1;
-  return 0;
-}
-
-function GaugeBar({
+function RatingBlock({
   percentage,
   rating,
+  scoreTotal,
+  scoreMax,
 }: {
   percentage: number;
   rating: Rating;
+  scoreTotal: number;
+  scoreMax: number;
 }) {
-  const activeIdx = activeSegmentIndex(percentage);
+  const clamped = Math.max(0, Math.min(100, percentage));
+  const ratingColor = SEGMENT_COLORS[rating];
+
   return (
-    <Section style={{ margin: "16px 0 8px" }}>
-      <Row>
-        {SEGMENTS.map((seg, idx) => {
-          const isActive = idx === activeIdx;
-          const baseColor = SEGMENT_COLORS[seg];
-          return (
-            <Column
-              key={seg}
-              style={{
-                backgroundColor: isActive ? baseColor : COLORS.bgCardRaised,
-                height: "10px",
-                borderRadius: "2px",
-                marginRight: idx < SEGMENTS.length - 1 ? "4px" : "0",
-                opacity: isActive ? 1 : 0.45,
-              }}
-            />
-          );
-        })}
-      </Row>
+    <Section style={{ margin: "16px 0 4px", textAlign: "center" as const }}>
+      <Text
+        style={{
+          fontFamily: FONT_HEADING,
+          color: ratingColor,
+          fontSize: "26px",
+          fontWeight: 500,
+          margin: "0 0 4px",
+          textAlign: "center" as const,
+          letterSpacing: "0.01em",
+        }}
+      >
+        {RATING_LABELS[rating]}
+      </Text>
       <Text
         style={{
           fontFamily: FONT_MONO,
           color: COLORS.textTertiary,
-          fontSize: "10px",
-          letterSpacing: "0.08em",
-          margin: "6px 0 0",
-        }}
-      >
-        0&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;25&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;50&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;75&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;100
-      </Text>
-      <Text
-        style={{
-          fontFamily: FONT_HEADING,
-          color: SEGMENT_COLORS[rating],
-          fontSize: "32px",
-          fontWeight: 600,
-          margin: "12px 0 2px",
-          textAlign: "center" as const,
-        }}
-      >
-        {percentage}
-      </Text>
-      <Text
-        style={{
-          fontFamily: FONT_BODY,
-          color: COLORS.textSecondary,
-          fontSize: "11px",
-          letterSpacing: "0.12em",
+          fontSize: "12px",
+          letterSpacing: "0.04em",
           margin: 0,
           textAlign: "center" as const,
         }}
       >
-        {RATING_LABELS[rating]}
+        {scoreTotal} / {scoreMax} · {clamped}%
       </Text>
     </Section>
   );
 }
 
-function TickerCard({
-  data,
-  appUrl,
-}: {
-  data: EmailTickerData;
-  appUrl: string;
-}) {
-  const positive = data.priceChange >= 0;
-  const arrow = positive ? "▲" : "▼";
-  const sign = data.priceChangePct >= 0 ? "+" : "";
-
+function CardShell({ children }: { children: React.ReactNode }) {
   return (
     <Section
       style={{
@@ -173,29 +136,71 @@ function TickerCard({
         marginBottom: "12px",
       }}
     >
+      {children}
+    </Section>
+  );
+}
+
+function TickerHeader({ ticker, name }: { ticker: string; name: string }) {
+  return (
+    <Text
+      style={{
+        fontFamily: FONT_MONO,
+        color: COLORS.textPrimary,
+        fontSize: "16px",
+        fontWeight: 600,
+        letterSpacing: "0.04em",
+        margin: 0,
+      }}
+    >
+      {ticker}
+      <span
+        style={{
+          color: COLORS.textTertiary,
+          fontWeight: 400,
+          marginLeft: "8px",
+        }}
+      >
+        · {name}
+      </span>
+    </Text>
+  );
+}
+
+function PendingTickerCard({ data }: { data: EmailTickerPending }) {
+  return (
+    <CardShell>
       <Row>
         <Column>
-          <Text
-            style={{
-              fontFamily: FONT_MONO,
-              color: COLORS.textPrimary,
-              fontSize: "16px",
-              fontWeight: 600,
-              letterSpacing: "0.04em",
-              margin: 0,
-            }}
-          >
-            {data.ticker}
-            <span
-              style={{
-                color: COLORS.textTertiary,
-                fontWeight: 400,
-                marginLeft: "8px",
-              }}
-            >
-              · {data.name}
-            </span>
-          </Text>
+          <TickerHeader ticker={data.ticker} name={data.name} />
+        </Column>
+      </Row>
+      <Text
+        style={{
+          fontFamily: FONT_BODY,
+          color: COLORS.textTertiary,
+          fontSize: "12px",
+          textAlign: "center" as const,
+          margin: "20px 0 4px",
+          fontStyle: "italic" as const,
+        }}
+      >
+        Data not available
+      </Text>
+    </CardShell>
+  );
+}
+
+function ReadyTickerCard({ data }: { data: EmailTickerReady }) {
+  const positive = data.priceChange >= 0;
+  const arrow = positive ? "▲" : "▼";
+  const sign = data.priceChangePct >= 0 ? "+" : "";
+
+  return (
+    <CardShell>
+      <Row>
+        <Column>
+          <TickerHeader ticker={data.ticker} name={data.name} />
           <Text
             style={{
               fontFamily: FONT_MONO,
@@ -219,38 +224,42 @@ function TickerCard({
         </Column>
       </Row>
 
-      <GaugeBar percentage={data.percentage} rating={data.rating} />
+      <RatingBlock
+        percentage={data.percentage}
+        rating={data.rating}
+        scoreTotal={data.scoreTotal}
+        scoreMax={data.scoreMax}
+      />
+    </CardShell>
+  );
+}
 
-      <Text
+function TickerCard({ data }: { data: EmailTickerData }) {
+  if (!data.dataReady) {
+    return <PendingTickerCard data={data} />;
+  }
+  return <ReadyTickerCard data={data} />;
+}
+
+function ExploreMoreCta({ appUrl }: { appUrl: string }) {
+  return (
+    <Section style={{ textAlign: "center" as const, margin: "8px 0 24px" }}>
+      <Button
+        href={appUrl}
         style={{
+          backgroundColor: COLORS.bgCardRaised,
+          border: `1px solid ${COLORS.borderStrong}`,
+          color: COLORS.accent,
           fontFamily: FONT_BODY,
-          color: COLORS.textTertiary,
-          fontSize: "11px",
-          textAlign: "center" as const,
-          margin: "0 0 16px",
+          fontSize: "12px",
+          letterSpacing: "0.08em",
+          padding: "12px 22px",
+          borderRadius: "10px",
+          textDecoration: "none",
         }}
       >
-        {data.triggeredCount} of {data.totalCount} indicators triggered
-      </Text>
-
-      <Section style={{ textAlign: "center" as const }}>
-        <Button
-          href={`${appUrl}/dashboard/${data.ticker}`}
-          style={{
-            backgroundColor: COLORS.bgCardRaised,
-            border: `1px solid ${COLORS.borderStrong}`,
-            color: COLORS.accent,
-            fontFamily: FONT_BODY,
-            fontSize: "12px",
-            letterSpacing: "0.06em",
-            padding: "10px 18px",
-            borderRadius: "8px",
-            textDecoration: "none",
-          }}
-        >
-          View on indicatorhub.dev →
-        </Button>
-      </Section>
+        Explore more on indicatorhub →
+      </Button>
     </Section>
   );
 }
@@ -260,7 +269,10 @@ export function DailyDigest({
   unsubscribeUrl,
   appUrl,
   dateLabel,
+  watchlistTotal,
 }: DailyDigestProps) {
+  const hasMore =
+    typeof watchlistTotal === "number" && watchlistTotal > tickers.length;
   return (
     <Html>
       <Head />
@@ -289,7 +301,7 @@ export function DailyDigest({
                 margin: "0 0 4px",
               }}
             >
-              Should I Buy Now
+              IndicatorHub
             </Text>
             <Text
               style={{
@@ -315,8 +327,10 @@ export function DailyDigest({
           </Section>
 
           {tickers.map((t) => (
-            <TickerCard key={t.ticker} data={t} appUrl={appUrl} />
+            <TickerCard key={t.ticker} data={t} />
           ))}
+
+          {hasMore && <ExploreMoreCta appUrl={appUrl} />}
 
           <Hr
             style={{

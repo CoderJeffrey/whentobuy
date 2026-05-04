@@ -15,7 +15,7 @@ const BATCH_SIZE = 10;
 const MAX_TICKERS_PER_EMAIL = 10;
 
 let cachedResend: Resend | null = null;
-function getResend(): Resend {
+export function getResendClient(): Resend {
   if (cachedResend) return cachedResend;
   const key = process.env.RESEND_API_KEY;
   if (!key) {
@@ -33,52 +33,81 @@ function getEnv(name: string): string {
 
 export function getSubjectLine(tickers: EmailTickerData[]): string {
   const buyCount = tickers.filter(
-    (t) => t.rating === "strong_buy" || t.rating === "weak_buy",
+    (t) => t.dataReady && (t.rating === "strong_buy" || t.rating === "weak_buy"),
   ).length;
   if (buyCount === 0) return "Your daily watchlist update";
   if (buyCount === 1) return "1 stock in your watchlist looks favorable";
   return `${buyCount} stocks in your watchlist look favorable`;
 }
 
-async function buildTickerData(
+export interface BuiltTickerData {
+  tickers: EmailTickerData[];
+  watchlistTotal: number;
+}
+
+export async function buildEmailTickerData(
   userId: string,
-): Promise<EmailTickerData[]> {
+): Promise<BuiltTickerData> {
   const watchlist = await loadWatchlist(userId);
   const limited = watchlist.slice(0, MAX_TICKERS_PER_EMAIL);
   const summaries = await Promise.all(
-    limited.map((t) => getTickerSummary(userId, t).catch((err) => {
-      console.warn(`[newsletter] summary failed for ${t}:`, err);
-      return null;
-    })),
+    limited.map((t) =>
+      getTickerSummary(userId, t).catch((err) => {
+        console.warn(`[newsletter] summary failed for ${t}:`, err);
+        return { ticker: t, name: t, dataReady: false as const };
+      }),
+    ),
   );
-  const out: EmailTickerData[] = [];
-  for (const s of summaries) {
+
+  const tickers = summaries.map((s): EmailTickerData => {
     if (
-      !s ||
-      !s.dataReady ||
-      s.currentPrice == null ||
-      s.priceChange == null ||
-      s.priceChangePct == null ||
-      s.percentage == null ||
-      s.rating == null ||
-      s.triggeredCount == null ||
-      s.totalCount == null
+      s.dataReady &&
+      s.currentPrice != null &&
+      s.priceChange != null &&
+      s.priceChangePct != null &&
+      s.percentage != null &&
+      s.rating != null &&
+      s.score != null
     ) {
-      continue;
+      return {
+        ticker: s.ticker,
+        name: s.name,
+        dataReady: true,
+        currentPrice: s.currentPrice,
+        priceChange: s.priceChange,
+        priceChangePct: s.priceChangePct,
+        percentage: s.percentage,
+        rating: s.rating,
+        scoreTotal: s.score.total,
+        scoreMax: s.score.max,
+      };
     }
-    out.push({
-      ticker: s.ticker,
-      name: s.name,
-      currentPrice: s.currentPrice,
-      priceChange: s.priceChange,
-      priceChangePct: s.priceChangePct,
-      percentage: s.percentage,
-      rating: s.rating,
-      triggeredCount: s.triggeredCount,
-      totalCount: s.totalCount,
-    });
-  }
-  return out;
+    return { ticker: s.ticker, name: s.name, dataReady: false };
+  });
+
+  return { tickers, watchlistTotal: watchlist.length };
+}
+
+export interface RenderDailyDigestArgs {
+  tickers: EmailTickerData[];
+  unsubscribeUrl: string;
+  appUrl: string;
+  watchlistTotal?: number;
+  dateLabel?: string;
+}
+
+export async function renderDailyDigestHtml(
+  args: RenderDailyDigestArgs,
+): Promise<string> {
+  return render(
+    createElement(DailyDigest, {
+      tickers: args.tickers,
+      unsubscribeUrl: args.unsubscribeUrl,
+      appUrl: args.appUrl,
+      watchlistTotal: args.watchlistTotal,
+      dateLabel: args.dateLabel ?? formatLongDateEt(),
+    }),
+  );
 }
 
 async function sendOne(
@@ -86,26 +115,26 @@ async function sendOne(
   appUrl: string,
   emailFrom: string,
 ): Promise<void> {
-  const tickers = await buildTickerData(subscriber.userId);
+  const { tickers, watchlistTotal } = await buildEmailTickerData(
+    subscriber.userId,
+  );
   if (tickers.length === 0) {
     console.log(
-      `[newsletter] skipping ${subscriber.email} — empty/un-ready watchlist`,
+      `[newsletter] skipping ${subscriber.email} — empty watchlist`,
     );
     return;
   }
 
   const unsubscribeUrl = `${appUrl}/api/unsubscribe?token=${subscriber.unsubscribeToken}`;
-  const html = await render(
-    createElement(DailyDigest, {
-      tickers,
-      unsubscribeUrl,
-      appUrl,
-      dateLabel: formatLongDateEt(),
-    }),
-  );
+  const html = await renderDailyDigestHtml({
+    tickers,
+    unsubscribeUrl,
+    appUrl,
+    watchlistTotal,
+  });
 
   try {
-    const result = await getResend().emails.send({
+    const result = await getResendClient().emails.send({
       from: emailFrom,
       to: subscriber.email,
       subject: getSubjectLine(tickers),
@@ -129,8 +158,7 @@ async function sendOne(
 export async function sendDailyNewsletter(): Promise<void> {
   const appUrl = getEnv("APP_URL");
   const emailFrom = getEnv("EMAIL_FROM");
-  // Validate Resend up-front so we fail fast instead of per-user.
-  getResend();
+  getResendClient();
 
   const subscribers = await listSubscribers();
   console.log(`[newsletter] ${subscribers.length} subscriber(s)`);
@@ -144,7 +172,7 @@ export async function sendDailyNewsletter(): Promise<void> {
 export async function sendNewsletterToUser(userId: string): Promise<void> {
   const appUrl = getEnv("APP_URL");
   const emailFrom = getEnv("EMAIL_FROM");
-  getResend();
+  getResendClient();
   const subscribers = await listSubscribers();
   const subscriber = subscribers.find((s) => s.userId === userId);
   if (!subscriber) {
