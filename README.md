@@ -42,6 +42,25 @@ Then open http://localhost:5173.
 
 `npm run backfill` is idempotent — it wipes `prices` and `indicators` and re-pulls 3 years of AAPL. Re-run it whenever you want the latest bars.
 
+## Newsletter
+
+The daily watchlist digest is sent via Resend (configured in `server/.env`: `RESEND_API_KEY`, `EMAIL_FROM`, `APP_URL`).
+
+To send a test version of the email to any address — using real data from your local dev user's watchlist:
+
+```sh
+cd server
+npm run send-test-email -- --to jeffrey.jl.liu@gmail.com
+```
+
+Multiple recipients (comma-separated):
+
+```sh
+npm run send-test-email -- --to addr1@example.com,addr2@example.com
+```
+
+Subject is prefixed with `[TEST]` so it won't be confused with real 8 PM ET sends. Bypasses the time-of-day check; sends immediately. Use it for design iteration on `server/src/emails/DailyDigest.tsx`.
+
 ## Project layout
 
 ```
