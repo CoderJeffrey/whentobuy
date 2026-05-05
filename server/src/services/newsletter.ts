@@ -115,6 +115,7 @@ async function sendOne(
   appUrl: string,
   emailFrom: string,
 ): Promise<void> {
+  const isOwner = process.env.OWNER_EMAIL === subscriber.email;
   const { tickers, watchlistTotal } = await buildEmailTickerData(
     subscriber.userId,
   );
@@ -125,6 +126,13 @@ async function sendOne(
     return;
   }
 
+  if (isOwner) {
+    console.log(
+      `[newsletter] preparing send for owner ${subscriber.email}: ${tickers.length} ticker(s), watchlistTotal=${watchlistTotal}`,
+    );
+  }
+
+  const subject = getSubjectLine(tickers);
   const unsubscribeUrl = `${appUrl}/api/unsubscribe?token=${subscriber.unsubscribeToken}`;
   const html = await renderDailyDigestHtml({
     tickers,
@@ -137,7 +145,7 @@ async function sendOne(
     const result = await getResendClient().emails.send({
       from: emailFrom,
       to: subscriber.email,
-      subject: getSubjectLine(tickers),
+      subject,
       html,
       headers: {
         "List-Unsubscribe": `<${unsubscribeUrl}>`,
@@ -147,10 +155,22 @@ async function sendOne(
     if (result.error) {
       throw new Error(result.error.message);
     }
+    if (isOwner) {
+      console.log(
+        `[newsletter] resend confirmation for owner ${subscriber.email}: id=${result.data?.id ?? "<no-id>"} subject="${subject}" from=${emailFrom}`,
+      );
+      console.log(
+        `[newsletter] resend raw response for owner:`,
+        JSON.stringify(result),
+      );
+    }
     await logEmail(subscriber.userId, "sent", result.data?.id ?? null);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[newsletter] send failed for ${subscriber.email}:`, message);
+    if (isOwner) {
+      console.error(`[newsletter] owner send failure detail:`, err);
+    }
     await logEmail(subscriber.userId, "failed", null, message);
   }
 }
