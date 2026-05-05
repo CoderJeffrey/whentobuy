@@ -1,20 +1,43 @@
 import "dotenv/config";
 
-import { isEightPmEt, nowEt } from "../lib/time.js";
+import { isNinePmEt, nowEt } from "../lib/time.js";
+import { ensureTickerData } from "../services/backfill.js";
 import { sendDailyNewsletter } from "../services/newsletter.js";
+import { listSubscribers } from "../services/preferences.js";
+import { loadWatchlist } from "../watchlist.js";
 
 const FORCE = process.argv.includes("--force") || process.env.FORCE === "true";
 
+async function refreshPricesForSubscribers(): Promise<void> {
+  const subscribers = await listSubscribers();
+  const tickers = new Set<string>();
+  for (const s of subscribers) {
+    const list = await loadWatchlist(s.userId);
+    for (const t of list) tickers.add(t);
+  }
+  console.log(
+    `[newsletter-cron] refreshing ${tickers.size} ticker(s) before send`,
+  );
+  for (const t of tickers) {
+    try {
+      await ensureTickerData(t, { force: true });
+    } catch (err) {
+      console.warn(`[newsletter-cron] refresh failed for ${t}:`, err);
+    }
+  }
+}
+
 async function main(): Promise<void> {
   const now = nowEt();
-  if (!FORCE && !isEightPmEt(now)) {
+  if (!FORCE && !isNinePmEt(now)) {
     console.log(
-      `[newsletter-cron] skipping — currently ${now.toFormat("HH:mm")} ET, not 20:00`,
+      `[newsletter-cron] skipping — currently ${now.toFormat("HH:mm")} ET, not 21:00`,
     );
     process.exit(0);
   }
 
   console.log(`[newsletter-cron] starting run at ${now.toISO()}`);
+  await refreshPricesForSubscribers();
   await sendDailyNewsletter();
   console.log("[newsletter-cron] complete");
   process.exit(0);
