@@ -4,8 +4,8 @@ export function nowEt(): DateTime {
   return DateTime.now().setZone("America/New_York");
 }
 
-export function isEightPmEt(now: DateTime = nowEt()): boolean {
-  return now.hour === 20;
+export function isNinePmEt(now: DateTime = nowEt()): boolean {
+  return now.hour === 21;
 }
 
 export function formatLongDateEt(now: DateTime = nowEt()): string {

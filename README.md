@@ -59,7 +59,7 @@ Multiple recipients (comma-separated):
 npm run send-test-email -- --to addr1@example.com,addr2@example.com
 ```
 
-Subject is prefixed with `[TEST]` so it won't be confused with real 8 PM ET sends. Bypasses the time-of-day check; sends immediately. Use it for design iteration on `server/src/emails/DailyDigest.tsx`.
+Subject is prefixed with `[TEST]` so it won't be confused with real 9 PM ET sends. Bypasses the time-of-day check; sends immediately. Use it for design iteration on `server/src/emails/DailyDigest.tsx`.
 
 ## Project layout
 
