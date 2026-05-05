@@ -162,9 +162,12 @@ export async function sendDailyNewsletter(): Promise<void> {
 
   const subscribers = await listSubscribers();
   console.log(`[newsletter] ${subscribers.length} subscriber(s)`);
-  for (const s of subscribers) {
-    if (s.email === "jeffrey.jl.liu@gmail.com") {
-      console.log(`[newsletter] subscriber match: ${s.email} (${s.userId})`);
+  const ownerEmail = process.env.OWNER_EMAIL;
+  if (ownerEmail) {
+    for (const s of subscribers) {
+      if (s.email === ownerEmail) {
+        console.log(`[newsletter] subscriber match: ${s.email} (${s.userId})`);
+      }
     }
   }
 
