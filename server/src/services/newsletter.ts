@@ -162,6 +162,14 @@ export async function sendDailyNewsletter(): Promise<void> {
 
   const subscribers = await listSubscribers();
   console.log(`[newsletter] ${subscribers.length} subscriber(s)`);
+  const ownerEmail = process.env.OWNER_EMAIL;
+  if (ownerEmail) {
+    for (const s of subscribers) {
+      if (s.email === ownerEmail) {
+        console.log(`[newsletter] subscriber match: ${s.email} (${s.userId})`);
+      }
+    }
+  }
 
   for (let i = 0; i < subscribers.length; i += BATCH_SIZE) {
     const batch = subscribers.slice(i, i + BATCH_SIZE);
