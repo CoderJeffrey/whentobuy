@@ -1,12 +1,10 @@
 import "dotenv/config";
 
-import { isNinePmEt, nowEt } from "../lib/time.js";
+import { nowEt } from "../lib/time.js";
 import { ensureTickerData } from "../services/backfill.js";
 import { sendDailyNewsletter } from "../services/newsletter.js";
 import { listSubscribers } from "../services/preferences.js";
 import { loadWatchlist } from "../watchlist.js";
-
-const FORCE = process.argv.includes("--force") || process.env.FORCE === "true";
 
 async function refreshPricesForSubscribers(): Promise<void> {
   const subscribers = await listSubscribers();
@@ -29,13 +27,6 @@ async function refreshPricesForSubscribers(): Promise<void> {
 
 async function main(): Promise<void> {
   const now = nowEt();
-  if (!FORCE && !isNinePmEt(now)) {
-    console.log(
-      `[newsletter-cron] skipping — currently ${now.toFormat("HH:mm")} ET, not 21:00`,
-    );
-    process.exit(0);
-  }
-
   console.log(`[newsletter-cron] starting run at ${now.toISO()}`);
   await refreshPricesForSubscribers();
   await sendDailyNewsletter();
