@@ -64,6 +64,38 @@ export async function fetchIndicators(): Promise<IndicatorMeta[]> {
   return res.json();
 }
 
+export async function fetchMarketplace(
+  signal?: AbortSignal,
+): Promise<IndicatorMeta[]> {
+  const res = await fetchWithAuth("/api/indicators/marketplace", { signal });
+  if (!res.ok) throw await readError(res);
+  return res.json();
+}
+
+export async function fetchLibrary(
+  signal?: AbortSignal,
+): Promise<IndicatorMeta[]> {
+  const res = await fetchWithAuth("/api/indicators/library", { signal });
+  if (!res.ok) throw await readError(res);
+  return res.json();
+}
+
+export async function addLibraryIndicator(id: string): Promise<void> {
+  const res = await fetchWithAuth("/api/indicators/library", {
+    method: "POST",
+    body: JSON.stringify({ indicator_id: id }),
+  });
+  if (!res.ok) throw await readError(res);
+}
+
+export async function removeLibraryIndicator(id: string): Promise<void> {
+  const res = await fetchWithAuth(
+    `/api/indicators/library/${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+  if (!res.ok) throw await readError(res);
+}
+
 export async function fetchConfig(): Promise<UserConfig> {
   const res = await fetchWithAuth("/api/config");
   if (!res.ok) throw await readError(res);

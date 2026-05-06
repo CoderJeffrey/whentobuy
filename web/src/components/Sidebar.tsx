@@ -1,10 +1,4 @@
-import {
-  Gauge,
-  LayoutDashboard,
-  Mail,
-  Settings,
-  TrendingUp,
-} from "lucide-react";
+import { Gauge, LayoutDashboard, Settings, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
 import { SidebarItem } from "./SidebarItem";
 import { UserMenu } from "./UserMenu";
@@ -50,7 +44,6 @@ export function Sidebar() {
       <nav className="flex flex-col gap-1" aria-label="Primary">
         <SidebarItem to="/dashboard" label="Dashboard" icon={LayoutDashboard} />
         <SidebarItem to="/indicators" label="Indicators" icon={TrendingUp} />
-        <SidebarItem to="/mail" label="Mail" icon={Mail} />
       </nav>
 
       <div className="mt-auto flex flex-col gap-2">

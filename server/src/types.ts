@@ -7,23 +7,9 @@ export type Rating =
 
 export type Tier = "high" | "medium" | "low";
 
-export type IndicatorId =
-  | "rsi_oversold"
-  | "macd_bullish_cross"
-  | "macd_positive"
-  | "above_sma_200"
-  | "above_sma_50"
-  | "above_sma_20"
-  | "golden_cross"
-  | "near_52w_low"
-  | "bb_lower_touch"
-  | "volume_spike";
+export type IndicatorId = string;
 
-export type IndicatorCategory =
-  | "momentum"
-  | "trend"
-  | "mean_reversion"
-  | "volume";
+export type IndicatorCategory = string;
 
 export interface IndicatorMeta {
   id: IndicatorId;

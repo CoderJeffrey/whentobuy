@@ -17,9 +17,15 @@ import express from "express";
 import { ConfigError, loadConfig, saveConfig } from "./config.js";
 import { requireAuth, type AuthedRequest } from "./middleware/auth.js";
 import { ensureDevUser, migrateDevUserJsonFiles } from "./services/dev-user.js";
+import {
+  addToLibrary,
+  LibraryError,
+  listLibrary,
+  removeFromLibrary,
+} from "./services/indicator-library.js";
 import { isDevAutoLogin } from "./supabase.js";
 import { getDb } from "./db.js";
-import { INDICATOR_METADATA } from "./indicator-registry.js";
+import { INDICATOR_METADATA, isIndicatorId } from "./indicator-registry.js";
 import { scoreDashboard } from "./scoring.js";
 import {
   ensureTickerData,
@@ -430,6 +436,70 @@ app.get("/api/indicators", (_req, res) => {
   res.json(INDICATOR_METADATA);
 });
 
+app.get("/api/indicators/marketplace", (_req, res) => {
+  res.set("Cache-Control", "public, max-age=3600");
+  res.json(INDICATOR_METADATA);
+});
+
+app.get("/api/indicators/library", async (req: AuthedRequest, res) => {
+  try {
+    const ids = new Set(await listLibrary(req.user!.id));
+    const items = INDICATOR_METADATA.filter((m) => ids.has(m.id));
+    res.json(items);
+  } catch (err) {
+    console.error("[/api/indicators/library GET] error:", err);
+    res.status(500).json({ error: "failed to load library" });
+  }
+});
+
+app.post("/api/indicators/library", async (req: AuthedRequest, res) => {
+  try {
+    const raw = (req.body as { indicator_id?: unknown })?.indicator_id;
+    if (typeof raw !== "string" || !isIndicatorId(raw)) {
+      res.status(400).json({ error: "invalid indicator_id" });
+      return;
+    }
+    await addToLibrary(req.user!.id, raw);
+    res.json({ ok: true, indicator_id: raw });
+  } catch (err) {
+    if (err instanceof LibraryError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    console.error("[/api/indicators/library POST] error:", err);
+    res.status(500).json({ error: "failed to add to library" });
+  }
+});
+
+app.delete("/api/indicators/library/:id", async (req: AuthedRequest, res) => {
+  try {
+    const id = req.params.id;
+    if (!id || typeof id !== "string") {
+      res.status(400).json({ error: "missing id" });
+      return;
+    }
+    const userId = req.user!.id;
+    await removeFromLibrary(userId, id);
+
+    // Cascade: drop the indicator from any tier in user_configs.weights.
+    const current = await loadConfig(userId);
+    if (current.weights[id] !== undefined) {
+      const next = { ...current.weights };
+      delete next[id];
+      await saveConfig(userId, { weights: next });
+    }
+
+    res.json({ ok: true, indicator_id: id });
+  } catch (err) {
+    if (err instanceof LibraryError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    console.error("[/api/indicators/library DELETE] error:", err);
+    res.status(500).json({ error: "failed to remove from library" });
+  }
+});
+
 app.get("/api/config", async (req: AuthedRequest, res) => {
   try {
     res.json(await loadConfig(req.user!.id));
@@ -551,10 +621,29 @@ app.put("/api/preferences", async (req: AuthedRequest, res) => {
 
 app.put("/api/config", async (req: AuthedRequest, res) => {
   try {
-    const saved = await saveConfig(req.user!.id, req.body);
+    const userId = req.user!.id;
+    const body = req.body as { weights?: Record<string, unknown> } | undefined;
+    if (body && typeof body === "object" && body.weights) {
+      const library = new Set(await listLibrary(userId));
+      const offending = Object.keys(body.weights).filter(
+        (id) => !library.has(id),
+      );
+      if (offending.length > 0) {
+        res.status(400).json({
+          error: `Indicators not in your library: ${offending.join(", ")}`,
+          code: "NOT_IN_LIBRARY",
+        });
+        return;
+      }
+    }
+    const saved = await saveConfig(userId, req.body);
     res.json(saved);
   } catch (err) {
     if (err instanceof ConfigError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    if (err instanceof LibraryError) {
       res.status(400).json({ error: err.message });
       return;
     }

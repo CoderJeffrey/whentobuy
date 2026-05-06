@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchConfig, fetchIndicators, saveConfig } from "../lib/api";
+import {
+  fetchConfig,
+  fetchLibrary,
+  fetchMarketplace,
+  saveConfig,
+} from "../lib/api";
 import type {
   DashboardResponse,
   IndicatorId,
@@ -24,8 +29,14 @@ export function IndicatorsSection({ data }: { data: DashboardResponse }) {
   const qc = useQueryClient();
 
   const indicatorsQ = useQuery({
-    queryKey: ["indicators"],
-    queryFn: fetchIndicators,
+    queryKey: ["marketplace"],
+    queryFn: ({ signal }) => fetchMarketplace(signal),
+    staleTime: 60 * 60_000,
+  });
+  const libraryQ = useQuery({
+    queryKey: ["library"],
+    queryFn: ({ signal }) => fetchLibrary(signal),
+    staleTime: 60_000,
   });
   const configQ = useQuery({ queryKey: ["config"], queryFn: fetchConfig });
 
@@ -252,8 +263,9 @@ export function IndicatorsSection({ data }: { data: DashboardResponse }) {
 
       {pickerOpen && (
         <IndicatorPicker
-          indicators={indicatorsQ.data ?? []}
+          indicators={libraryQ.data ?? []}
           usedIds={usedIds}
+          emptyLibrary={(libraryQ.data ?? []).length === 0}
           onAdd={addIndicators}
           onClose={() => setPickerOpen(false)}
         />

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import type { IndicatorId, IndicatorMeta, Tier } from "../types";
 
 type Step = "select" | "assign";
@@ -18,11 +19,13 @@ const TIER_RGB: Record<Tier, string> = {
 export function IndicatorPicker({
   indicators,
   usedIds,
+  emptyLibrary = false,
   onAdd,
   onClose,
 }: {
   indicators: IndicatorMeta[];
   usedIds: Set<string>;
+  emptyLibrary?: boolean;
   onAdd: (ids: IndicatorId[], tier: Tier) => void;
   onClose: () => void;
 }) {
@@ -105,6 +108,7 @@ export function IndicatorPicker({
             setQuery={setQuery}
             filtered={filtered}
             selectedIds={selectedIds}
+            emptyLibrary={emptyLibrary}
             onToggle={toggle}
             onClose={onClose}
             onContinue={() => setStep("assign")}
@@ -130,6 +134,7 @@ function SelectStep({
   setQuery,
   filtered,
   selectedIds,
+  emptyLibrary,
   onToggle,
   onClose,
   onContinue,
@@ -139,11 +144,58 @@ function SelectStep({
   setQuery: (q: string) => void;
   filtered: IndicatorMeta[];
   selectedIds: Set<IndicatorId>;
+  emptyLibrary: boolean;
   onToggle: (id: IndicatorId) => void;
   onClose: () => void;
   onContinue: () => void;
 }) {
   const count = selectedIds.size;
+
+  if (emptyLibrary) {
+    return (
+      <>
+        <Header title="Add indicators" onClose={onClose} />
+        <div
+          className="px-8 py-12 flex flex-col items-center gap-4 text-center"
+          data-testid="picker-empty-library"
+        >
+          <div
+            className="text-sm"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            Your library is empty.
+          </div>
+          <div
+            className="text-xs"
+            style={{ color: "var(--text-tertiary)", maxWidth: 320 }}
+          >
+            Browse the marketplace to add indicators, then come back here to
+            assign them to a tier.
+          </div>
+          <Link
+            to="/indicators"
+            onClick={onClose}
+            className="px-4 py-2 rounded-md text-sm"
+            style={{
+              backgroundColor: "var(--accent)",
+              color: "var(--bg-page)",
+              fontWeight: 500,
+            }}
+            data-testid="picker-marketplace-link"
+          >
+            Browse marketplace →
+          </Link>
+        </div>
+        <FooterBar>
+          <span />
+          <SecondaryButton onClick={onClose} data-testid="picker-cancel">
+            Close
+          </SecondaryButton>
+        </FooterBar>
+      </>
+    );
+  }
+
   return (
     <>
       <Header title="Add indicators" onClose={onClose} />

@@ -23,7 +23,7 @@ function fmt(n: number | null | undefined, digits = 2): string {
   return n == null ? "n/a" : n.toFixed(digits);
 }
 
-export const INDICATOR_REGISTRY: Record<IndicatorId, IndicatorDef> = {
+export const INDICATOR_REGISTRY: Record<string, IndicatorDef> = {
   rsi_oversold: {
     id: "rsi_oversold",
     label: "RSI Oversold",
@@ -210,13 +210,21 @@ export const INDICATOR_REGISTRY: Record<IndicatorId, IndicatorDef> = {
 
 export const INDICATOR_METADATA: IndicatorMeta[] = Object.values(
   INDICATOR_REGISTRY,
-).map(({ id, label, abbreviation, category, description }) => ({
-  id,
-  label,
-  abbreviation,
-  category,
-  description,
-}));
+)
+  .map(({ id, label, abbreviation, category, description }) => ({
+    id,
+    label,
+    abbreviation,
+    category,
+    description,
+  }))
+  .sort((a, b) => a.label.localeCompare(b.label));
+
+export const INDICATOR_IDS: IndicatorId[] = Object.keys(INDICATOR_REGISTRY);
+
+export function isIndicatorId(value: unknown): value is IndicatorId {
+  return typeof value === "string" && value in INDICATOR_REGISTRY;
+}
 
 export const CATEGORIES: IndicatorCategory[] = [
   "momentum",
