@@ -65,20 +65,6 @@ export interface DashboardResponse {
   sma200Series: SmaPoint[];
 }
 
-export interface IndicatorRow {
-  date: string;
-  rsi_14: number | null;
-  sma_20: number | null;
-  sma_50: number | null;
-  sma_200: number | null;
-  macd: number | null;
-  macd_signal: number | null;
-  macd_cross_up: boolean | null;
-  bb_lower: number | null;
-  pct_from_52w_low: number | null;
-  volume_avg_20: number | null;
-}
-
 export interface PriceRow {
   date: string;
   open: number;

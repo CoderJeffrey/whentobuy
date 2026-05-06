@@ -1,8 +1,7 @@
+import type { EvalContext } from "./eval-context.js";
 import { INDICATOR_REGISTRY } from "./indicator-registry.js";
 import type {
   IndicatorId,
-  IndicatorRow,
-  PriceRow,
   Rating,
   Score,
   ScoreBreakdownItem,
@@ -23,9 +22,7 @@ function ratingForPct(pct: number): Rating {
 }
 
 export function scoreDashboard(
-  latestPrice: PriceRow,
-  latestIndicators: IndicatorRow,
-  recentIndicators: IndicatorRow[],
+  ctx: EvalContext,
   weights: UserWeights,
 ): Score {
   const entries = (Object.entries(weights) as [IndicatorId, Tier][])
@@ -35,7 +32,7 @@ export function scoreDashboard(
   const breakdown: ScoreBreakdownItem[] = entries.flatMap(([id, tier]) => {
     const def = INDICATOR_REGISTRY[id];
     if (!def) return [];
-    const result = def.evaluate(latestPrice, latestIndicators, recentIndicators);
+    const result = def.evaluate(ctx);
     const pointsMax = TIER_POINTS[tier];
     return [
       {
