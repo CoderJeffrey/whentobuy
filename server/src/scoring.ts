@@ -1,8 +1,7 @@
+import type { EvalContext } from "./eval-context.js";
 import { INDICATOR_REGISTRY } from "./indicator-registry.js";
 import type {
   IndicatorId,
-  IndicatorRow,
-  PriceRow,
   Rating,
   Score,
   ScoreBreakdownItem,
@@ -23,28 +22,29 @@ function ratingForPct(pct: number): Rating {
 }
 
 export function scoreDashboard(
-  latestPrice: PriceRow,
-  latestIndicators: IndicatorRow,
-  recentIndicators: IndicatorRow[],
+  ctx: EvalContext,
   weights: UserWeights,
 ): Score {
   const entries = (Object.entries(weights) as [IndicatorId, Tier][])
     .filter(([id]) => INDICATOR_REGISTRY[id] !== undefined)
     .sort((a, b) => TIER_ORDER.indexOf(a[1]) - TIER_ORDER.indexOf(b[1]));
 
-  const breakdown: ScoreBreakdownItem[] = entries.map(([id, tier]) => {
+  const breakdown: ScoreBreakdownItem[] = entries.flatMap(([id, tier]) => {
     const def = INDICATOR_REGISTRY[id];
-    const result = def.evaluate(latestPrice, latestIndicators, recentIndicators);
+    if (!def) return [];
+    const result = def.evaluate(ctx);
     const pointsMax = TIER_POINTS[tier];
-    return {
-      id,
-      label: def.label,
-      abbreviation: def.abbreviation,
-      tier,
-      points: result.triggered ? pointsMax : 0,
-      triggered: result.triggered,
-      displayValue: result.displayValue,
-    };
+    return [
+      {
+        id,
+        label: def.label,
+        abbreviation: def.abbreviation,
+        tier,
+        points: result.triggered ? pointsMax : 0,
+        triggered: result.triggered,
+        displayValue: result.displayValue,
+      },
+    ];
   });
 
   const total = breakdown.reduce((s, x) => s + x.points, 0);

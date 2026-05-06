@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import { ensureUserLibraryInitialized } from "../services/indicator-library.js";
 import {
   devUserEmail,
   devUserId,
@@ -22,6 +23,9 @@ export async function requireAuth(
 ): Promise<void> {
   if (isDevAutoLogin()) {
     req.user = { id: devUserId(), email: devUserEmail() };
+    await ensureUserLibraryInitialized(req.user.id).catch((err: unknown) => {
+      console.warn("[requireAuth] library init failed:", err);
+    });
     next();
     return;
   }
@@ -43,6 +47,9 @@ export async function requireAuth(
       id: data.user.id,
       email: data.user.email ?? "",
     };
+    await ensureUserLibraryInitialized(req.user.id).catch((err: unknown) => {
+      console.warn("[requireAuth] library init failed:", err);
+    });
     next();
   } catch (err) {
     console.error("[requireAuth] error verifying token:", err);

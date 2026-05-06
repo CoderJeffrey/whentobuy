@@ -15,11 +15,18 @@ import { fileURLToPath } from "node:url";
 import cors from "cors";
 import express from "express";
 import { ConfigError, loadConfig, saveConfig } from "./config.js";
+import { buildEvalContext } from "./eval-context.js";
 import { requireAuth, type AuthedRequest } from "./middleware/auth.js";
 import { ensureDevUser, migrateDevUserJsonFiles } from "./services/dev-user.js";
+import {
+  addToLibrary,
+  LibraryError,
+  listLibrary,
+  removeFromLibrary,
+} from "./services/indicator-library.js";
 import { isDevAutoLogin } from "./supabase.js";
 import { getDb } from "./db.js";
-import { INDICATOR_METADATA } from "./indicator-registry.js";
+import { INDICATOR_METADATA, isIndicatorId } from "./indicator-registry.js";
 import { scoreDashboard } from "./scoring.js";
 import {
   ensureTickerData,
@@ -34,7 +41,6 @@ import {
 } from "./services/securities.js";
 import type {
   DashboardResponse,
-  IndicatorRow,
   PriceBar,
   PriceRow,
   SmaPoint,
@@ -72,16 +78,6 @@ function asNumber(v: unknown): number {
   throw new Error(`cannot convert to number: ${String(v)}`);
 }
 
-function asNullableNumber(v: unknown): number | null {
-  if (v == null) return null;
-  return asNumber(v);
-}
-
-function asNullableBoolean(v: unknown): boolean | null {
-  if (v == null) return null;
-  return Boolean(v);
-}
-
 function sqlLit(s: string): string {
   return `'${s.replace(/'/g, "''")}'`;
 }
@@ -116,11 +112,6 @@ async function buildDashboard(
     throw new TickerNotFoundError(sym);
   }
 
-  const indicatorReader = await db.runAndReadAll(
-    `SELECT date, rsi_14, sma_20, sma_50, sma_200, macd, macd_signal, macd_cross_up, bb_lower, pct_from_52w_low, volume_avg_20 FROM indicators WHERE ticker = ${sqlLit(sym)} ORDER BY date ASC`,
-  );
-  const indicatorRows = indicatorReader.getRowObjectsJS();
-
   const priceHistory: PriceBar[] = priceRows.map((r) => ({
     date: toIsoDate(r.date),
     open: asNumber(r.open),
@@ -130,47 +121,30 @@ async function buildDashboard(
     volume: asNumber(r.volume),
   }));
 
-  const indicators: IndicatorRow[] = indicatorRows.map((r) => ({
-    date: toIsoDate(r.date),
-    rsi_14: asNullableNumber(r.rsi_14),
-    sma_20: asNullableNumber(r.sma_20),
-    sma_50: asNullableNumber(r.sma_50),
-    sma_200: asNullableNumber(r.sma_200),
-    macd: asNullableNumber(r.macd),
-    macd_signal: asNullableNumber(r.macd_signal),
-    macd_cross_up: asNullableBoolean(r.macd_cross_up),
-    bb_lower: asNullableNumber(r.bb_lower),
-    pct_from_52w_low: asNullableNumber(r.pct_from_52w_low),
-    volume_avg_20: asNullableNumber(r.volume_avg_20),
-  }));
-
   const latest = priceHistory[priceHistory.length - 1]!;
   const prev = priceHistory[priceHistory.length - 2];
-  const latestIndicator = indicators[indicators.length - 1]!;
 
   const priceChange = prev ? latest.close - prev.close : 0;
   const priceChangePct = prev ? (priceChange / prev.close) * 100 : 0;
 
-  const sma200Series: SmaPoint[] = indicators
-    .filter((r): r is IndicatorRow & { sma_200: number } => r.sma_200 != null)
-    .map((r) => ({ date: r.date, value: r.sma_200 }));
+  const priceRowsForCtx: PriceRow[] = priceHistory.map((p) => ({
+    date: p.date,
+    open: p.open,
+    high: p.high,
+    low: p.low,
+    close: p.close,
+    volume: p.volume,
+  }));
+  const ctx = buildEvalContext(priceRowsForCtx);
 
-  const latestPriceRow: PriceRow = {
-    date: latest.date,
-    open: latest.open,
-    high: latest.high,
-    low: latest.low,
-    close: latest.close,
-    volume: latest.volume,
-  };
+  const sma200Series: SmaPoint[] = ctx.sma200
+    .map((v, i) =>
+      v == null ? null : { date: priceHistory[i]!.date, value: v },
+    )
+    .filter((p): p is SmaPoint => p != null);
 
   const { weights } = await loadConfig(userId);
-  const score = scoreDashboard(
-    latestPriceRow,
-    latestIndicator,
-    indicators,
-    weights,
-  );
+  const score = scoreDashboard(ctx, weights);
 
   return {
     ticker: sym,
@@ -209,73 +183,36 @@ async function getWatchlistDisplayItem(
   const priceReader = await db.runAndReadAll(
     `SELECT date, open, high, low, close, volume FROM prices
      WHERE ticker = ${sqlLit(ticker)}
-     ORDER BY date DESC
-     LIMIT 2`,
+     ORDER BY date ASC`,
   );
   const priceRows = priceReader.getRowObjectsJS();
   if (priceRows.length === 0) {
     return { ticker, name, dataReady: false };
   }
 
-  const latest = priceRows[0]!;
-  const prev = priceRows[1];
-  const latestClose = asNumber(latest.close);
+  const prices: PriceRow[] = priceRows.map((r) => ({
+    date: toIsoDate(r.date),
+    open: asNumber(r.open),
+    high: asNumber(r.high),
+    low: asNumber(r.low),
+    close: asNumber(r.close),
+    volume: asNumber(r.volume),
+  }));
+  const latest = prices[prices.length - 1]!;
+  const prev = prices[prices.length - 2];
   const priceChangePct = prev
-    ? ((latestClose - asNumber(prev.close)) / asNumber(prev.close)) * 100
+    ? ((latest.close - prev.close) / prev.close) * 100
     : 0;
 
-  const indicatorReader = await db.runAndReadAll(
-    `SELECT date, rsi_14, sma_20, sma_50, sma_200, macd, macd_signal, macd_cross_up, bb_lower, pct_from_52w_low, volume_avg_20
-     FROM indicators WHERE ticker = ${sqlLit(ticker)} ORDER BY date ASC`,
-  );
-  const indicatorRows = indicatorReader.getRowObjectsJS();
-  if (indicatorRows.length === 0) {
-    return {
-      ticker,
-      name,
-      dataReady: true,
-      currentPrice: Number(latestClose.toFixed(2)),
-      priceChangePct: Number(priceChangePct.toFixed(2)),
-    };
-  }
-
-  const indicators: IndicatorRow[] = indicatorRows.map((r) => ({
-    date: toIsoDate(r.date),
-    rsi_14: asNullableNumber(r.rsi_14),
-    sma_20: asNullableNumber(r.sma_20),
-    sma_50: asNullableNumber(r.sma_50),
-    sma_200: asNullableNumber(r.sma_200),
-    macd: asNullableNumber(r.macd),
-    macd_signal: asNullableNumber(r.macd_signal),
-    macd_cross_up: asNullableBoolean(r.macd_cross_up),
-    bb_lower: asNullableNumber(r.bb_lower),
-    pct_from_52w_low: asNullableNumber(r.pct_from_52w_low),
-    volume_avg_20: asNullableNumber(r.volume_avg_20),
-  }));
-
-  const latestIndicator = indicators[indicators.length - 1]!;
-  const latestPriceRow: PriceRow = {
-    date: toIsoDate(latest.date),
-    open: asNumber(latest.open),
-    high: asNumber(latest.high),
-    low: asNumber(latest.low),
-    close: latestClose,
-    volume: asNumber(latest.volume),
-  };
-
+  const ctx = buildEvalContext(prices);
   const { weights } = await loadConfig(userId);
-  const score = scoreDashboard(
-    latestPriceRow,
-    latestIndicator,
-    indicators,
-    weights,
-  );
+  const score = scoreDashboard(ctx, weights);
 
   return {
     ticker,
     name,
     dataReady: true,
-    currentPrice: Number(latestClose.toFixed(2)),
+    currentPrice: Number(latest.close.toFixed(2)),
     priceChangePct: Number(priceChangePct.toFixed(2)),
     rating: score.rating,
     percentage: score.percentage,
@@ -430,6 +367,70 @@ app.get("/api/indicators", (_req, res) => {
   res.json(INDICATOR_METADATA);
 });
 
+app.get("/api/indicators/marketplace", (_req, res) => {
+  res.set("Cache-Control", "no-cache");
+  res.json(INDICATOR_METADATA);
+});
+
+app.get("/api/indicators/library", async (req: AuthedRequest, res) => {
+  try {
+    const ids = new Set(await listLibrary(req.user!.id));
+    const items = INDICATOR_METADATA.filter((m) => ids.has(m.id));
+    res.json(items);
+  } catch (err) {
+    console.error("[/api/indicators/library GET] error:", err);
+    res.status(500).json({ error: "failed to load library" });
+  }
+});
+
+app.post("/api/indicators/library", async (req: AuthedRequest, res) => {
+  try {
+    const raw = (req.body as { indicator_id?: unknown })?.indicator_id;
+    if (typeof raw !== "string" || !isIndicatorId(raw)) {
+      res.status(400).json({ error: "invalid indicator_id" });
+      return;
+    }
+    await addToLibrary(req.user!.id, raw);
+    res.json({ ok: true, indicator_id: raw });
+  } catch (err) {
+    if (err instanceof LibraryError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    console.error("[/api/indicators/library POST] error:", err);
+    res.status(500).json({ error: "failed to add to library" });
+  }
+});
+
+app.delete("/api/indicators/library/:id", async (req: AuthedRequest, res) => {
+  try {
+    const id = req.params.id;
+    if (!id || typeof id !== "string") {
+      res.status(400).json({ error: "missing id" });
+      return;
+    }
+    const userId = req.user!.id;
+    await removeFromLibrary(userId, id);
+
+    // Cascade: drop the indicator from any tier in user_configs.weights.
+    const current = await loadConfig(userId);
+    if (current.weights[id] !== undefined) {
+      const next = { ...current.weights };
+      delete next[id];
+      await saveConfig(userId, { weights: next });
+    }
+
+    res.json({ ok: true, indicator_id: id });
+  } catch (err) {
+    if (err instanceof LibraryError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    console.error("[/api/indicators/library DELETE] error:", err);
+    res.status(500).json({ error: "failed to remove from library" });
+  }
+});
+
 app.get("/api/config", async (req: AuthedRequest, res) => {
   try {
     res.json(await loadConfig(req.user!.id));
@@ -551,10 +552,29 @@ app.put("/api/preferences", async (req: AuthedRequest, res) => {
 
 app.put("/api/config", async (req: AuthedRequest, res) => {
   try {
-    const saved = await saveConfig(req.user!.id, req.body);
+    const userId = req.user!.id;
+    const body = req.body as { weights?: Record<string, unknown> } | undefined;
+    if (body && typeof body === "object" && body.weights) {
+      const library = new Set(await listLibrary(userId));
+      const offending = Object.keys(body.weights).filter(
+        (id) => !library.has(id),
+      );
+      if (offending.length > 0) {
+        res.status(400).json({
+          error: `Indicators not in your library: ${offending.join(", ")}`,
+          code: "NOT_IN_LIBRARY",
+        });
+        return;
+      }
+    }
+    const saved = await saveConfig(userId, req.body);
     res.json(saved);
   } catch (err) {
     if (err instanceof ConfigError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    if (err instanceof LibraryError) {
       res.status(400).json({ error: err.message });
       return;
     }
