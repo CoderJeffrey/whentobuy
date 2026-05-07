@@ -1,8 +1,12 @@
-import { INDICATOR_IDS, isIndicatorId } from "../indicator-registry.js";
+import { isIndicatorId } from "../indicator-registry.js";
 import { getSupabaseAdmin } from "../supabase.js";
 import type { IndicatorId } from "../types.js";
 
-export const DEFAULT_LIBRARY: IndicatorId[] = [...INDICATOR_IDS];
+export const DEFAULT_LIBRARY: IndicatorId[] = [
+  "rsi_oversold",
+  "above_ema_200",
+  "above_sma_200",
+];
 
 const initialized = new Set<string>();
 
