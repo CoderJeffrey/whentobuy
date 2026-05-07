@@ -1,6 +1,8 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
-import { fetchDashboard } from "../lib/api";
+import { fetchConfig, fetchDashboard } from "../lib/api";
+import { deriveLiveScore } from "../lib/score";
 import { IndicatorsSection } from "../components/IndicatorsSection";
 import { NavBar } from "../components/NavBar";
 import { PriceChart } from "../components/PriceChart";
@@ -8,6 +10,7 @@ import { ScoreCard } from "../components/ScoreCard";
 import { TickerError } from "../components/TickerError";
 import { TickerLoading } from "../components/TickerLoading";
 import { Watchlist } from "../components/Watchlist";
+import type { DashboardResponse } from "../types";
 
 export default function Dashboard() {
   const { symbol } = useParams<{ symbol: string }>();
@@ -19,6 +22,15 @@ export default function Dashboard() {
     staleTime: 5 * 60_000,
     retry: false,
   });
+
+  const configQ = useQuery({ queryKey: ["config"], queryFn: fetchConfig });
+
+  const liveData = useMemo<DashboardResponse | undefined>(() => {
+    if (!data) return data;
+    const weights = configQ.data?.weights;
+    if (!weights) return data;
+    return { ...data, score: deriveLiveScore(weights, data.score.breakdown) };
+  }, [data, configQ.data]);
 
   return (
     <div className="max-w-7xl mx-auto px-6">
@@ -36,17 +48,17 @@ export default function Dashboard() {
             />
           )}
 
-          {data && !error && (
+          {liveData && !error && (
             <div
               className="flex flex-col gap-8"
               data-testid="dashboard-loaded"
               data-fetching={isFetching ? "true" : "false"}
             >
-              <ScoreCard data={data} />
-              <IndicatorsSection data={data} />
+              <ScoreCard data={liveData} />
+              <IndicatorsSection data={liveData} />
               <PriceChart
-                priceHistory={data.priceHistory}
-                sma200Series={data.sma200Series}
+                priceHistory={liveData.priceHistory}
+                sma200Series={liveData.sma200Series}
               />
             </div>
           )}
