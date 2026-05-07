@@ -52,6 +52,7 @@ export function IndicatorsSection({ data }: { data: DashboardResponse }) {
     onSuccess: (saved) => {
       qc.setQueryData(["config"], saved);
       qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["watchlist"] });
     },
   });
 
