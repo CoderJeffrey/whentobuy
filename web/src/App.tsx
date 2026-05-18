@@ -1,8 +1,9 @@
-import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { AppLayout } from "./layouts/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import Indicators from "./pages/Indicators";
+import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Mail from "./pages/Mail";
 import Settings from "./pages/Settings";
@@ -30,14 +31,29 @@ function FullPageLoader() {
   );
 }
 
-function ProtectedRoutes() {
+function LoginRoute() {
   const { user, loading } = useAuth();
   if (loading) return <FullPageLoader />;
-  if (!user) return <Login />;
+  if (user) return <Navigate to="/dashboard" replace />;
+  return <Login />;
+}
+
+function ProtectedRoutes() {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+  if (loading) return <FullPageLoader />;
+  if (!user) {
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={{ from: location.pathname + location.search }}
+      />
+    );
+  }
   return (
     <Routes>
       <Route element={<AppLayout />}>
-        <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/dashboard/:symbol" element={<Dashboard />} />
         <Route path="/indicators" element={<Indicators />} />
@@ -55,6 +71,8 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route path="/login" element={<LoginRoute />} />
           <Route path="/unsubscribe" element={<Unsubscribe />} />
           <Route path="*" element={<ProtectedRoutes />} />
         </Routes>
