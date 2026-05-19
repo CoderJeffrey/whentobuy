@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import { ensureUserHasCombo } from "../services/combos.js";
 import { ensureUserLibraryInitialized } from "../services/indicator-library.js";
 import {
   devUserEmail,
@@ -26,6 +27,9 @@ export async function requireAuth(
     await ensureUserLibraryInitialized(req.user.id).catch((err: unknown) => {
       console.warn("[requireAuth] library init failed:", err);
     });
+    await ensureUserHasCombo(req.user.id).catch((err: unknown) => {
+      console.warn("[requireAuth] combo init failed:", err);
+    });
     next();
     return;
   }
@@ -49,6 +53,9 @@ export async function requireAuth(
     };
     await ensureUserLibraryInitialized(req.user.id).catch((err: unknown) => {
       console.warn("[requireAuth] library init failed:", err);
+    });
+    await ensureUserHasCombo(req.user.id).catch((err: unknown) => {
+      console.warn("[requireAuth] combo init failed:", err);
     });
     next();
   } catch (err) {

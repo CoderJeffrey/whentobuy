@@ -1,8 +1,7 @@
-import { loadConfig } from "../config.js";
 import { getDb } from "../db.js";
 import { buildEvalContext } from "../eval-context.js";
-import { scoreDashboard } from "../scoring.js";
-import type { PriceRow, Rating, Score } from "../types.js";
+import type { ComboStatus, PriceRow } from "../types.js";
+import { evaluateCombos, listCombos } from "./combos.js";
 import { getSecurity } from "./securities.js";
 
 export interface TickerSummary {
@@ -12,11 +11,10 @@ export interface TickerSummary {
   currentPrice?: number;
   priceChange?: number;
   priceChangePct?: number;
-  rating?: Rating;
-  percentage?: number;
-  triggeredCount?: number;
-  totalCount?: number;
-  score?: Score;
+  combos?: ComboStatus[];
+  greenComboCount?: number;
+  totalCombos?: number;
+  anyGreen?: boolean;
   asOf?: string;
 }
 
@@ -82,8 +80,9 @@ export async function getTickerSummary(
   const priceChangePct = prev ? (priceChange / prev.close) * 100 : 0;
 
   const ctx = buildEvalContext(prices);
-  const { weights } = await loadConfig(userId);
-  const score = scoreDashboard(ctx, weights);
+  const combos = await listCombos(userId);
+  const statuses = evaluateCombos(combos, ctx);
+  const greenComboCount = statuses.filter((s) => s.green).length;
 
   return {
     ticker,
@@ -92,11 +91,10 @@ export async function getTickerSummary(
     currentPrice: Number(latest.close.toFixed(2)),
     priceChange: Number(priceChange.toFixed(2)),
     priceChangePct: Number(priceChangePct.toFixed(2)),
-    rating: score.rating,
-    percentage: score.percentage,
-    triggeredCount: score.triggeredCount,
-    totalCount: score.totalCount,
-    score,
+    combos: statuses,
+    greenComboCount,
+    totalCombos: combos.length,
+    anyGreen: greenComboCount > 0,
     asOf: latest.date,
   };
 }

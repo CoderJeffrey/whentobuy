@@ -1,17 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  addLibraryIndicator,
-  fetchLibrary,
+  addIndicatorToCombo,
+  createCombo,
+  deleteCombo,
+  fetchCombos,
   fetchMarketplace,
-  removeLibraryIndicator,
+  updateCombo,
 } from "../lib/api";
+import { ComboEditorModal } from "../components/ComboEditorModal";
+import { IndicatorDetailModal } from "../components/IndicatorDetailModal";
 import { PageHeader } from "../components/PageHeader";
-import type { IndicatorMeta } from "../types";
+import type { Combo, IndicatorMeta } from "../types";
+import { ApiError } from "../types";
 
 const PAGE_SIZE = 20;
+const MAX_COMBOS = 5;
 
-type CardMode = "idle" | "confirm-add" | "confirm-remove";
+type EditorState =
+  | { kind: "closed" }
+  | { kind: "create"; seedIndicatorId?: string }
+  | { kind: "edit"; combo: Combo };
 
 export default function Indicators() {
   const qc = useQueryClient();
@@ -21,22 +30,101 @@ export default function Indicators() {
     queryFn: ({ signal }) => fetchMarketplace(signal),
     staleTime: 60 * 60_000,
   });
-  const libraryQ = useQuery({
-    queryKey: ["library"],
-    queryFn: ({ signal }) => fetchLibrary(signal),
-    staleTime: 60_000,
+  const combosQ = useQuery({
+    queryKey: ["combos"],
+    queryFn: ({ signal }) => fetchCombos(signal),
+    staleTime: 30_000,
   });
 
-  const libraryIds = useMemo(
-    () => new Set((libraryQ.data ?? []).map((m) => m.id)),
-    [libraryQ.data],
-  );
+  const combos = combosQ.data ?? [];
 
   const [query, setQuery] = useState("");
-  const [pendingId, setPendingId] = useState<string | null>(null);
-  const [pendingMode, setPendingMode] = useState<CardMode>("idle");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [detailMeta, setDetailMeta] = useState<IndicatorMeta | null>(null);
+  const [editorState, setEditorState] = useState<EditorState>({ kind: "closed" });
+  const [notice, setNotice] = useState<string | null>(null);
+  const [editorError, setEditorError] = useState<string | null>(null);
+  const noticeTimer = useRef<number | null>(null);
+
+  function flash(message: string, ms = 2500) {
+    setNotice(message);
+    if (noticeTimer.current) window.clearTimeout(noticeTimer.current);
+    noticeTimer.current = window.setTimeout(() => setNotice(null), ms);
+  }
+  useEffect(
+    () => () => {
+      if (noticeTimer.current) window.clearTimeout(noticeTimer.current);
+    },
+    [],
+  );
+
+  function invalidateDownstream() {
+    qc.invalidateQueries({ queryKey: ["combos"] });
+    qc.invalidateQueries({ queryKey: ["dashboard"] });
+    qc.invalidateQueries({ queryKey: ["watchlist"] });
+  }
+
+  const createMut = useMutation({
+    mutationFn: (input: { name: string; indicatorIds: string[] }) =>
+      createCombo(input),
+    onSuccess: () => {
+      invalidateDownstream();
+      flash("Combo created");
+      setEditorState({ kind: "closed" });
+      setEditorError(null);
+    },
+    onError: (err) => {
+      setEditorError(err instanceof Error ? err.message : "Failed to save");
+    },
+  });
+
+  const updateMut = useMutation({
+    mutationFn: (input: {
+      id: string;
+      name: string;
+      indicatorIds: string[];
+    }) =>
+      updateCombo(input.id, {
+        name: input.name,
+        indicatorIds: input.indicatorIds,
+      }),
+    onSuccess: () => {
+      invalidateDownstream();
+      flash("Combo saved");
+      setEditorState({ kind: "closed" });
+      setEditorError(null);
+    },
+    onError: (err) => {
+      setEditorError(err instanceof Error ? err.message : "Failed to save");
+    },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => deleteCombo(id),
+    onSuccess: () => {
+      invalidateDownstream();
+      flash("Combo deleted");
+      setEditorState({ kind: "closed" });
+    },
+  });
+
+  const addIndMut = useMutation({
+    mutationFn: ({
+      comboId,
+      indicatorId,
+    }: {
+      comboId: string;
+      indicatorId: string;
+    }) => addIndicatorToCombo(comboId, indicatorId),
+    onSuccess: (_data, vars) => {
+      invalidateDownstream();
+      const combo = combos.find((c) => c.id === vars.comboId);
+      flash(`Added to ${combo?.name ?? "combo"}`);
+    },
+    onError: (err) => {
+      flash(err instanceof Error ? err.message : "Failed to add");
+    },
+  });
 
   const filtered = useMemo(() => {
     const all = marketplaceQ.data ?? [];
@@ -73,213 +161,276 @@ export default function Indicators() {
     return () => obs.disconnect();
   }, [hasMore, filtered.length]);
 
-  const gridRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (pendingMode === "idle") return;
-    function onClick(e: MouseEvent) {
-      const grid = gridRef.current;
-      if (!grid) return;
-      const target = e.target as Node | null;
-      if (!target) return;
-      const card = (target as HTMLElement).closest("[data-card-id]");
-      if (!card) {
-        setPendingId(null);
-        setPendingMode("idle");
-      }
-    }
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, [pendingMode]);
-
-  function clearError() {
-    setErrorMsg(null);
-  }
-
-  const addMut = useMutation({
-    mutationFn: (id: string) => addLibraryIndicator(id),
-    onMutate: async (id: string) => {
-      clearError();
-      await qc.cancelQueries({ queryKey: ["library"] });
-      const prev = qc.getQueryData<IndicatorMeta[]>(["library"]);
-      const meta = (marketplaceQ.data ?? []).find((m) => m.id === id);
-      if (prev && meta && !prev.some((m) => m.id === id)) {
-        qc.setQueryData<IndicatorMeta[]>(["library"], [...prev, meta]);
-      }
-      return { prev };
-    },
-    onError: (_err, _id, ctx) => {
-      if (ctx?.prev) qc.setQueryData(["library"], ctx.prev);
-      setErrorMsg("Could not add indicator. Please try again.");
-    },
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: ["library"] });
-    },
-  });
-
-  const removeMut = useMutation({
-    mutationFn: (id: string) => removeLibraryIndicator(id),
-    onMutate: async (id: string) => {
-      clearError();
-      await qc.cancelQueries({ queryKey: ["library"] });
-      await qc.cancelQueries({ queryKey: ["config"] });
-      const prevLib = qc.getQueryData<IndicatorMeta[]>(["library"]);
-      if (prevLib) {
-        qc.setQueryData<IndicatorMeta[]>(
-          ["library"],
-          prevLib.filter((m) => m.id !== id),
-        );
-      }
-      return { prevLib };
-    },
-    onError: (_err, _id, ctx) => {
-      if (ctx?.prevLib) qc.setQueryData(["library"], ctx.prevLib);
-      setErrorMsg("Could not remove indicator. Please try again.");
-    },
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: ["library"] });
-      qc.invalidateQueries({ queryKey: ["config"] });
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
-    },
-  });
-
-  function startAdd(id: string) {
-    setPendingId(id);
-    setPendingMode("confirm-add");
-  }
-  function startRemove(id: string) {
-    setPendingId(id);
-    setPendingMode("confirm-remove");
-  }
-  function cancelPending() {
-    setPendingId(null);
-    setPendingMode("idle");
-  }
-  function confirmAdd(id: string) {
-    cancelPending();
-    addMut.mutate(id);
-  }
-  function confirmRemove(id: string) {
-    cancelPending();
-    removeMut.mutate(id);
-  }
-
-  const isLoading = marketplaceQ.isPending || libraryQ.isPending;
+  const atLimit = combos.length >= MAX_COMBOS;
   const total = marketplaceQ.data?.length ?? 0;
+  const isLoading = marketplaceQ.isPending || combosQ.isPending;
+
+  function openCreate(seedIndicatorId?: string) {
+    if (atLimit) {
+      flash(`Combo limit reached (${MAX_COMBOS}).`);
+      return;
+    }
+    setEditorError(null);
+    setEditorState({ kind: "create", seedIndicatorId });
+    setDetailMeta(null);
+  }
+
+  function openEdit(combo: Combo) {
+    setEditorError(null);
+    setEditorState({ kind: "edit", combo });
+  }
+
+  function handleAddToCombo(comboId: string, indicatorId: string) {
+    addIndMut.mutate({ comboId, indicatorId });
+    setDetailMeta(null);
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-6">
       <PageHeader
         title="Indicators"
-        description="Browse and add to your library. Configure tiers on the Dashboard."
+        description="Combine indicators into combos. A combo turns GREEN when every indicator in it triggers."
       />
 
-      <div
-        className="mt-2 mb-6 flex items-center gap-3 px-4 py-3 rounded-xl"
-        style={{
-          backgroundColor: "var(--bg-card)",
-          border: "1px solid var(--border)",
-        }}
-        data-testid="marketplace-search"
-      >
-        <span style={{ color: "var(--text-tertiary)" }} aria-hidden>
-          🔍
-        </span>
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={`Search ${total > 0 ? `${total}+ ` : ""}indicators...`}
-          className="flex-1 bg-transparent outline-none text-sm placeholder:text-(--text-tertiary)"
-          style={{ color: "var(--text-primary)" }}
-          autoComplete="off"
-          spellCheck={false}
-          data-testid="marketplace-search-input"
-        />
-        {query && (
+      <section className="mt-2 mb-8" data-testid="combos-manager">
+        <div className="flex items-baseline justify-between mb-3">
+          <h2
+            className="text-[11px] tracking-label uppercase"
+            style={{ color: "var(--text-secondary)", fontWeight: 500 }}
+          >
+            Your Combos ({combos.length} / {MAX_COMBOS})
+          </h2>
           <button
             type="button"
-            onClick={() => setQuery("")}
-            aria-label="Clear search"
-            className="text-base leading-none"
+            onClick={() => openCreate()}
+            disabled={atLimit}
+            className="px-3 py-1.5 rounded-md text-xs tracking-label uppercase"
+            style={{
+              color: atLimit ? "var(--text-tertiary)" : "var(--accent)",
+              border: `1px solid ${
+                atLimit ? "var(--border)" : "var(--border-strong)"
+              }`,
+              backgroundColor: "transparent",
+              fontWeight: 500,
+              cursor: atLimit ? "not-allowed" : "pointer",
+            }}
+            title={atLimit ? `Combo limit reached (${MAX_COMBOS})` : undefined}
+            data-testid="combo-new"
+          >
+            + New Combo
+          </button>
+        </div>
+
+        {combosQ.isPending ? (
+          <div
+            className="py-6 text-sm"
             style={{ color: "var(--text-tertiary)" }}
           >
-            ×
-          </button>
+            Loading combos…
+          </div>
+        ) : combos.length === 0 ? (
+          <div
+            className="py-10 text-center text-sm rounded-xl"
+            style={{
+              color: "var(--text-secondary)",
+              backgroundColor: "var(--bg-card)",
+              border: "1px dashed var(--border)",
+            }}
+          >
+            No combos yet. Create one to get started.
+          </div>
+        ) : (
+          <div className="combos-grid">
+            {combos.map((c) => (
+              <ComboCard key={c.id} combo={c} onEdit={() => openEdit(c)} />
+            ))}
+          </div>
         )}
-      </div>
+      </section>
 
-      {errorMsg && (
+      <section data-testid="indicator-library-section">
+        <h2
+          className="text-[11px] tracking-label uppercase mb-3"
+          style={{ color: "var(--text-secondary)", fontWeight: 500 }}
+        >
+          Indicator Library
+        </h2>
+
         <div
-          className="mb-4 p-3 rounded-md text-xs"
+          className="mb-6 flex items-center gap-3 px-4 py-3 rounded-xl"
           style={{
-            backgroundColor: "var(--bg-card-raised)",
-            border: "1px solid var(--negative)",
-            color: "var(--negative)",
+            backgroundColor: "var(--bg-card)",
+            border: "1px solid var(--border)",
           }}
-          data-testid="marketplace-error"
+          data-testid="marketplace-search"
         >
-          {errorMsg}
+          <span style={{ color: "var(--text-tertiary)" }} aria-hidden>
+            🔍
+          </span>
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={`Search ${total > 0 ? `${total}+ ` : ""}indicators...`}
+            className="flex-1 bg-transparent outline-none text-sm placeholder:text-(--text-tertiary)"
+            style={{ color: "var(--text-primary)" }}
+            autoComplete="off"
+            spellCheck={false}
+            data-testid="marketplace-search-input"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              aria-label="Clear search"
+              className="text-base leading-none"
+              style={{ color: "var(--text-tertiary)" }}
+            >
+              ×
+            </button>
+          )}
         </div>
-      )}
 
-      {isLoading && (
-        <div
-          className="py-16 text-center text-sm"
-          style={{ color: "var(--text-tertiary)" }}
-          data-testid="marketplace-loading"
-        >
-          Loading indicators…
-        </div>
-      )}
+        {isLoading && (
+          <div
+            className="py-16 text-center text-sm"
+            style={{ color: "var(--text-tertiary)" }}
+            data-testid="marketplace-loading"
+          >
+            Loading indicators…
+          </div>
+        )}
 
-      {!isLoading && filtered.length === 0 && (
-        <div
-          className="py-16 text-center text-sm"
-          style={{ color: "var(--text-tertiary)" }}
-          data-testid="marketplace-empty"
-        >
-          {query
-            ? `No indicators match "${query}".`
-            : "No indicators available."}
-        </div>
-      )}
+        {!isLoading && filtered.length === 0 && (
+          <div
+            className="py-16 text-center text-sm"
+            style={{ color: "var(--text-tertiary)" }}
+            data-testid="marketplace-empty"
+          >
+            {query
+              ? `No indicators match "${query}".`
+              : "No indicators available."}
+          </div>
+        )}
 
-      {!isLoading && filtered.length > 0 && (
-        <div ref={gridRef} className="marketplace-grid" data-testid="marketplace-grid">
-          {visible.map((m) => {
-            const inLibrary = libraryIds.has(m.id);
-            const isPending = pendingId === m.id;
-            const cardMode: CardMode =
-              isPending && pendingMode !== "idle" ? pendingMode : "idle";
-            return (
-              <MarketplaceCard
+        {!isLoading && filtered.length > 0 && (
+          <div className="marketplace-grid" data-testid="marketplace-grid">
+            {visible.map((m) => (
+              <LibraryCard
                 key={m.id}
                 meta={m}
-                inLibrary={inLibrary}
-                mode={cardMode}
-                onStartAdd={() => startAdd(m.id)}
-                onConfirmAdd={() => confirmAdd(m.id)}
-                onStartRemove={() => startRemove(m.id)}
-                onConfirmRemove={() => confirmRemove(m.id)}
-                onCancel={cancelPending}
+                combos={combos}
+                onOpen={() => setDetailMeta(m)}
               />
-            );
-          })}
+            ))}
+          </div>
+        )}
+
+        {hasMore && (
+          <div
+            ref={sentinelRef}
+            className="py-6 text-center text-xs tracking-label uppercase"
+            style={{ color: "var(--text-tertiary)" }}
+            data-testid="marketplace-sentinel"
+          >
+            Loading more…
+          </div>
+        )}
+      </section>
+
+      {notice && (
+        <div
+          className="fixed bottom-6 right-6 text-[11px] px-3 py-2 rounded-md"
+          role="status"
+          style={{
+            color: "var(--text-secondary)",
+            backgroundColor: "var(--bg-card-raised)",
+            border: "1px solid var(--border)",
+            boxShadow: "0 6px 24px rgba(0,0,0,0.35)",
+          }}
+          data-testid="indicators-notice"
+        >
+          {notice}
         </div>
       )}
 
-      {hasMore && (
-        <div
-          ref={sentinelRef}
-          className="py-6 text-center text-xs tracking-label uppercase"
-          style={{ color: "var(--text-tertiary)" }}
-          data-testid="marketplace-sentinel"
-        >
-          Loading more…
-        </div>
+      {detailMeta && (
+        <IndicatorDetailModal
+          meta={detailMeta}
+          combos={combos}
+          maxCombos={MAX_COMBOS}
+          onClose={() => setDetailMeta(null)}
+          onAddToCombo={(comboId) =>
+            handleAddToCombo(comboId, detailMeta.id)
+          }
+          onCreateCombo={() => openCreate(detailMeta.id)}
+        />
+      )}
+
+      {editorState.kind !== "closed" && (
+        <ComboEditorModal
+          mode={editorState.kind}
+          initial={
+            editorState.kind === "edit" ? editorState.combo : undefined
+          }
+          seedIndicatorId={
+            editorState.kind === "create"
+              ? editorState.seedIndicatorId
+              : undefined
+          }
+          marketplace={marketplaceQ.data ?? []}
+          onClose={() => {
+            setEditorState({ kind: "closed" });
+            setEditorError(null);
+          }}
+          onSave={async (input) => {
+            if (editorState.kind === "create") {
+              try {
+                await createMut.mutateAsync(input);
+              } catch {
+                /* error surfaced via state */
+              }
+            } else {
+              try {
+                await updateMut.mutateAsync({
+                  id: editorState.combo.id,
+                  name: input.name,
+                  indicatorIds: input.indicatorIds,
+                });
+              } catch {
+                /* error surfaced via state */
+              }
+            }
+          }}
+          onDelete={
+            editorState.kind === "edit"
+              ? async () => {
+                  if (
+                    !window.confirm(
+                      `Delete combo "${editorState.combo.name}"? This can't be undone.`,
+                    )
+                  ) {
+                    return;
+                  }
+                  await deleteMut.mutateAsync(editorState.combo.id);
+                }
+              : undefined
+          }
+          error={
+            editorError ??
+            (createMut.error instanceof ApiError
+              ? createMut.error.message
+              : null)
+          }
+        />
       )}
 
       <style>{`
+        .combos-grid {
+          display: grid;
+          gap: 12px;
+          grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        }
         .marketplace-grid {
           display: grid;
           gap: 16px;
@@ -299,39 +450,68 @@ export default function Indicators() {
   );
 }
 
-function MarketplaceCard({
-  meta,
-  inLibrary,
-  mode,
-  onStartAdd,
-  onConfirmAdd,
-  onStartRemove,
-  onConfirmRemove,
-  onCancel,
-}: {
-  meta: IndicatorMeta;
-  inLibrary: boolean;
-  mode: CardMode;
-  onStartAdd: () => void;
-  onConfirmAdd: () => void;
-  onStartRemove: () => void;
-  onConfirmRemove: () => void;
-  onCancel: () => void;
-}) {
+function ComboCard({ combo, onEdit }: { combo: Combo; onEdit: () => void }) {
   return (
-    <div
-      data-card-id={meta.id}
-      data-testid="marketplace-card"
-      data-in-library={inLibrary ? "true" : "false"}
-      data-mode={mode}
-      className="rounded-xl p-4 flex flex-col gap-3 transition-colors"
+    <button
+      type="button"
+      onClick={onEdit}
+      className="text-left rounded-xl p-4 flex flex-col gap-3 transition-colors hover:[border-color:var(--border-strong)]"
       style={{
         backgroundColor: "var(--bg-card)",
-        border: `1px solid ${
-          mode !== "idle" ? "var(--border-strong)" : "var(--border)"
-        }`,
+        border: "1px solid var(--border)",
+        minHeight: 120,
+      }}
+      data-testid="combo-card"
+      data-combo-id={combo.id}
+    >
+      <div
+        className="text-sm"
+        style={{ color: "var(--text-primary)", fontWeight: 500 }}
+      >
+        {combo.name}
+      </div>
+      <div
+        className="text-[11px]"
+        style={{ color: "var(--text-tertiary)" }}
+      >
+        {combo.indicatorIds.length}{" "}
+        {combo.indicatorIds.length === 1 ? "indicator" : "indicators"}
+      </div>
+      <div className="mt-auto flex items-center justify-between">
+        <span
+          className="text-[10px] tracking-label uppercase"
+          style={{ color: "var(--accent)" }}
+        >
+          Edit →
+        </span>
+      </div>
+    </button>
+  );
+}
+
+function LibraryCard({
+  meta,
+  combos,
+  onOpen,
+}: {
+  meta: IndicatorMeta;
+  combos: Combo[];
+  onOpen: () => void;
+}) {
+  const inCombos = combos.filter((c) => c.indicatorIds.includes(meta.id))
+    .length;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="rounded-xl p-4 flex flex-col gap-3 transition-colors text-left"
+      style={{
+        backgroundColor: "var(--bg-card)",
+        border: "1px solid var(--border)",
         minHeight: 168,
       }}
+      data-testid="marketplace-card"
+      data-card-id={meta.id}
     >
       <div className="flex items-start justify-between gap-2">
         <span
@@ -340,13 +520,13 @@ function MarketplaceCard({
         >
           {meta.abbreviation}
         </span>
-        {inLibrary && mode === "idle" && (
+        {inCombos > 0 && (
           <span
             className="text-[10px] tracking-label uppercase"
             style={{ color: "var(--positive)" }}
-            aria-hidden
+            title={`In ${inCombos} ${inCombos === 1 ? "combo" : "combos"}`}
           >
-            ✓
+            in {inCombos}
           </span>
         )}
       </div>
@@ -367,147 +547,12 @@ function MarketplaceCard({
         </span>
       </div>
 
-      <div className="mt-auto">
-        <CardAction
-          inLibrary={inLibrary}
-          mode={mode}
-          onStartAdd={onStartAdd}
-          onConfirmAdd={onConfirmAdd}
-          onStartRemove={onStartRemove}
-          onConfirmRemove={onConfirmRemove}
-          onCancel={onCancel}
-        />
-      </div>
-    </div>
-  );
-}
-
-function CardAction({
-  inLibrary,
-  mode,
-  onStartAdd,
-  onConfirmAdd,
-  onStartRemove,
-  onConfirmRemove,
-  onCancel,
-}: {
-  inLibrary: boolean;
-  mode: CardMode;
-  onStartAdd: () => void;
-  onConfirmAdd: () => void;
-  onStartRemove: () => void;
-  onConfirmRemove: () => void;
-  onCancel: () => void;
-}) {
-  if (mode === "confirm-add") {
-    return (
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={onConfirmAdd}
-          className="flex-1 px-2 py-1.5 rounded-md text-xs"
-          style={{
-            backgroundColor: "var(--accent)",
-            color: "var(--bg-page)",
-            fontWeight: 500,
-          }}
-          data-testid="card-confirm-add"
-        >
-          Confirm
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="flex-1 px-2 py-1.5 rounded-md text-xs"
-          style={{
-            backgroundColor: "transparent",
-            color: "var(--text-secondary)",
-            border: "1px solid var(--border)",
-          }}
-          data-testid="card-cancel"
-        >
-          Cancel
-        </button>
-      </div>
-    );
-  }
-
-  if (mode === "confirm-remove") {
-    return (
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={onConfirmRemove}
-          className="flex-1 px-2 py-1.5 rounded-md text-xs"
-          style={{
-            backgroundColor: "var(--negative)",
-            color: "var(--bg-page)",
-            fontWeight: 500,
-          }}
-          data-testid="card-confirm-remove"
-        >
-          Confirm Remove
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="flex-1 px-2 py-1.5 rounded-md text-xs"
-          style={{
-            backgroundColor: "transparent",
-            color: "var(--text-secondary)",
-            border: "1px solid var(--border)",
-          }}
-          data-testid="card-cancel"
-        >
-          Cancel
-        </button>
-      </div>
-    );
-  }
-
-  if (inLibrary) {
-    return (
-      <button
-        type="button"
-        onClick={onStartRemove}
-        className="w-full px-2 py-1.5 rounded-md text-xs added-chip"
-        style={{
-          backgroundColor: "var(--bg-card-raised)",
-          color: "var(--positive)",
-          border: "1px solid var(--border)",
-          fontWeight: 500,
-        }}
-        data-testid="card-added"
+      <span
+        className="text-[10px] tracking-label uppercase"
+        style={{ color: "var(--text-tertiary)" }}
       >
-        <span className="added-label">✓ Added</span>
-        <span className="remove-label">Remove</span>
-        <style>{`
-          .added-chip .remove-label { display: none; }
-          .added-chip:hover {
-            color: var(--negative);
-            border-color: var(--negative);
-          }
-          .added-chip:hover .added-label { display: none; }
-          .added-chip:hover .remove-label { display: inline; }
-        `}</style>
-      </button>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={onStartAdd}
-      className="w-full px-2 py-1.5 rounded-md text-xs transition-colors"
-      style={{
-        backgroundColor: "transparent",
-        color: "var(--accent)",
-        border: "1px solid var(--border-strong)",
-        fontWeight: 500,
-      }}
-      data-testid="card-add"
-    >
-      + Add
+        Tap for details →
+      </span>
     </button>
   );
 }

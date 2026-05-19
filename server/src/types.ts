@@ -1,12 +1,3 @@
-export type Rating =
-  | "strong_buy"
-  | "weak_buy"
-  | "hold"
-  | "weak_sell"
-  | "immediate_sell";
-
-export type Tier = "high" | "medium" | "low";
-
 export type IndicatorId = string;
 
 export type IndicatorCategory = string;
@@ -17,26 +8,6 @@ export interface IndicatorMeta {
   abbreviation: string;
   category: IndicatorCategory;
   description: string;
-}
-
-export interface ScoreBreakdownItem {
-  id: IndicatorId;
-  label: string;
-  abbreviation: string;
-  tier: Tier;
-  points: number;
-  triggered: boolean;
-  displayValue: string;
-}
-
-export interface Score {
-  total: number;
-  max: number;
-  percentage: number;
-  rating: Rating;
-  triggeredCount: number;
-  totalCount: number;
-  breakdown: ScoreBreakdownItem[];
 }
 
 export interface PriceBar {
@@ -53,6 +24,29 @@ export interface SmaPoint {
   value: number;
 }
 
+export interface ComboIndicatorStatus {
+  indicatorId: IndicatorId;
+  label: string;
+  abbreviation: string;
+  triggered: boolean;
+  displayValue: string;
+}
+
+export interface ComboStatus {
+  comboId: string;
+  name: string;
+  green: boolean;
+  indicators: ComboIndicatorStatus[];
+}
+
+export interface Combo {
+  id: string;
+  name: string;
+  indicatorIds: IndicatorId[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface DashboardResponse {
   ticker: string;
   name: string;
@@ -60,7 +54,8 @@ export interface DashboardResponse {
   currentPrice: number;
   priceChange: number;
   priceChangePct: number;
-  score: Score;
+  combos: ComboStatus[];
+  anyGreen: boolean;
   priceHistory: PriceBar[];
   sma200Series: SmaPoint[];
 }
@@ -74,20 +69,16 @@ export interface PriceRow {
   volume: number;
 }
 
-export type UserWeights = Partial<Record<IndicatorId, Tier>>;
-
-export interface UserConfig {
-  weights: UserWeights;
-}
-
 export interface WatchlistItem {
   ticker: string;
   name: string;
   dataReady: boolean;
   currentPrice?: number;
   priceChangePct?: number;
-  rating?: Rating;
-  percentage?: number;
+  /** Number of combos currently green for this ticker (binary status driver). */
+  greenComboCount?: number;
+  /** Total combos the user has — used to render "N / total" when desired. */
+  totalCombos?: number;
 }
 
 export interface WatchlistResponse {

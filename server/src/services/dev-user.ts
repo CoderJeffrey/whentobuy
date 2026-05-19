@@ -1,11 +1,7 @@
 import { existsSync, readFileSync, renameSync } from "node:fs";
 import { resolve } from "node:path";
 import { devUserEmail, devUserId, getSupabaseAdmin } from "../supabase.js";
-import { DEFAULT_CONFIG, validateConfig } from "../config.js";
 
-const CONFIG_JSON_PATH = resolve(
-  process.env.CONFIG_PATH ?? "./data/user-config.json",
-);
 const WATCHLIST_JSON_PATH = resolve(
   process.env.WATCHLIST_PATH ?? "./data/watchlist.json",
 );
@@ -31,15 +27,6 @@ export async function ensureDevUser(): Promise<string> {
   return id;
 }
 
-async function hasConfigRow(userId: string): Promise<boolean> {
-  const { data } = await getSupabaseAdmin()
-    .from("user_configs")
-    .select("user_id")
-    .eq("user_id", userId)
-    .maybeSingle();
-  return Boolean(data);
-}
-
 async function hasWatchlistRow(userId: string): Promise<boolean> {
   const { data } = await getSupabaseAdmin()
     .from("user_watchlists")
@@ -55,31 +42,6 @@ function backupPath(p: string): string {
 
 export async function migrateDevUserJsonFiles(userId: string): Promise<void> {
   const admin = getSupabaseAdmin();
-
-  if (existsSync(CONFIG_JSON_PATH) && !(await hasConfigRow(userId))) {
-    try {
-      const raw = readFileSync(CONFIG_JSON_PATH, "utf8");
-      const parsed = JSON.parse(raw) as unknown;
-      const validated = (() => {
-        try {
-          return validateConfig(parsed);
-        } catch {
-          return DEFAULT_CONFIG;
-        }
-      })();
-      const { error } = await admin
-        .from("user_configs")
-        .upsert(
-          { user_id: userId, weights: validated.weights },
-          { onConflict: "user_id" },
-        );
-      if (error) throw new Error(error.message);
-      renameSync(CONFIG_JSON_PATH, backupPath(CONFIG_JSON_PATH));
-      console.log("[dev-user] migrated user-config.json -> Supabase");
-    } catch (err) {
-      console.warn("[dev-user] config migration failed:", err);
-    }
-  }
 
   if (existsSync(WATCHLIST_JSON_PATH) && !(await hasWatchlistRow(userId))) {
     try {
