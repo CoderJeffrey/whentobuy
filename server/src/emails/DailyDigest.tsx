@@ -13,7 +13,11 @@ import {
   Text,
 } from "@react-email/components";
 import * as React from "react";
-import type { Rating } from "../types.js";
+
+export interface EmailComboMatch {
+  comboId: string;
+  name: string;
+}
 
 export interface EmailTickerReady {
   ticker: string;
@@ -22,10 +26,8 @@ export interface EmailTickerReady {
   currentPrice: number;
   priceChange: number;
   priceChangePct: number;
-  percentage: number;
-  rating: Rating;
-  scoreTotal: number;
-  scoreMax: number;
+  greenCombos: EmailComboMatch[];
+  totalCombos: number;
 }
 
 export interface EmailTickerPending {
@@ -45,22 +47,6 @@ export interface DailyDigestProps {
   watchlistTotal?: number;
 }
 
-const RATING_LABELS: Record<Rating, string> = {
-  immediate_sell: "Don't Buy",
-  weak_sell: "Probably Not",
-  hold: "Hold",
-  weak_buy: "Weak Buy",
-  strong_buy: "Strong Buy",
-};
-
-const SEGMENT_COLORS: Record<Rating, string> = {
-  immediate_sell: "#8b3a3a",
-  weak_sell: "#a65d5d",
-  hold: "#9c8547",
-  weak_buy: "#6b8a6d",
-  strong_buy: "#4c7a57",
-};
-
 const COLORS = {
   bgPage: "#0F0F0E",
   bgCard: "#18181a",
@@ -79,51 +65,6 @@ const FONT_HEADING = "Georgia, 'Times New Roman', serif";
 const FONT_BODY =
   "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
 const FONT_MONO = "'SF Mono', Monaco, 'Courier New', monospace";
-
-function RatingBlock({
-  percentage,
-  rating,
-  scoreTotal,
-  scoreMax,
-}: {
-  percentage: number;
-  rating: Rating;
-  scoreTotal: number;
-  scoreMax: number;
-}) {
-  const clamped = Math.max(0, Math.min(100, percentage));
-  const ratingColor = SEGMENT_COLORS[rating];
-
-  return (
-    <Section style={{ margin: "16px 0 4px", textAlign: "center" as const }}>
-      <Text
-        style={{
-          fontFamily: FONT_HEADING,
-          color: ratingColor,
-          fontSize: "26px",
-          fontWeight: 500,
-          margin: "0 0 4px",
-          textAlign: "center" as const,
-          letterSpacing: "0.01em",
-        }}
-      >
-        {RATING_LABELS[rating]}
-      </Text>
-      <Text
-        style={{
-          fontFamily: FONT_MONO,
-          color: COLORS.textTertiary,
-          fontSize: "12px",
-          letterSpacing: "0.04em",
-          margin: 0,
-          textAlign: "center" as const,
-        }}
-      >
-        {scoreTotal} / {scoreMax} · {clamped}%
-      </Text>
-    </Section>
-  );
-}
 
 function CardShell({ children }: { children: React.ReactNode }) {
   return (
@@ -191,7 +132,87 @@ function PendingTickerCard({ data }: { data: EmailTickerPending }) {
   );
 }
 
-function ReadyTickerCard({ data }: { data: EmailTickerReady }) {
+function ComboMatches({
+  greenCombos,
+  appUrl,
+  ticker,
+}: {
+  greenCombos: EmailComboMatch[];
+  appUrl: string;
+  ticker: string;
+}) {
+  if (greenCombos.length === 0) {
+    return (
+      <Text
+        style={{
+          fontFamily: FONT_BODY,
+          color: COLORS.textTertiary,
+          fontSize: "12px",
+          margin: "14px 0 4px",
+          textAlign: "center" as const,
+          fontStyle: "italic" as const,
+        }}
+      >
+        No combos triggered today.
+      </Text>
+    );
+  }
+  return (
+    <Section style={{ margin: "14px 0 4px" }}>
+      <Text
+        style={{
+          fontFamily: FONT_BODY,
+          color: COLORS.positive,
+          fontSize: "13px",
+          margin: "0 0 6px",
+        }}
+      >
+        ✓ {greenCombos.length}{" "}
+        {greenCombos.length === 1 ? "combo" : "combos"} triggered:
+      </Text>
+      {greenCombos.map((c) => (
+        <Text
+          key={c.comboId}
+          style={{
+            fontFamily: FONT_BODY,
+            color: COLORS.textPrimary,
+            fontSize: "13px",
+            margin: "2px 0",
+            paddingLeft: "12px",
+          }}
+        >
+          • {c.name}
+        </Text>
+      ))}
+      <Section style={{ marginTop: "12px", textAlign: "center" as const }}>
+        <Button
+          href={`${appUrl}/dashboard/${ticker}`}
+          style={{
+            backgroundColor: COLORS.bgCardRaised,
+            border: `1px solid ${COLORS.borderStrong}`,
+            color: COLORS.accent,
+            fontFamily: FONT_BODY,
+            fontSize: "11px",
+            letterSpacing: "0.06em",
+            padding: "8px 16px",
+            borderRadius: "8px",
+            textDecoration: "none",
+          }}
+        >
+          View on indicatorhub.dev →
+        </Button>
+      </Section>
+    </Section>
+  );
+}
+
+function ReadyTickerCard({
+  data,
+  appUrl,
+}: {
+  data: EmailTickerReady;
+  appUrl: string;
+}) {
   const positive = data.priceChange >= 0;
   const arrow = positive ? "▲" : "▼";
   const sign = data.priceChangePct >= 0 ? "+" : "";
@@ -224,21 +245,26 @@ function ReadyTickerCard({ data }: { data: EmailTickerReady }) {
         </Column>
       </Row>
 
-      <RatingBlock
-        percentage={data.percentage}
-        rating={data.rating}
-        scoreTotal={data.scoreTotal}
-        scoreMax={data.scoreMax}
+      <ComboMatches
+        greenCombos={data.greenCombos}
+        appUrl={appUrl}
+        ticker={data.ticker}
       />
     </CardShell>
   );
 }
 
-function TickerCard({ data }: { data: EmailTickerData }) {
+function TickerCard({
+  data,
+  appUrl,
+}: {
+  data: EmailTickerData;
+  appUrl: string;
+}) {
   if (!data.dataReady) {
     return <PendingTickerCard data={data} />;
   }
-  return <ReadyTickerCard data={data} />;
+  return <ReadyTickerCard data={data} appUrl={appUrl} />;
 }
 
 function ExploreMoreCta({ appUrl }: { appUrl: string }) {
@@ -327,7 +353,7 @@ export function DailyDigest({
           </Section>
 
           {tickers.map((t) => (
-            <TickerCard key={t.ticker} data={t} />
+            <TickerCard key={t.ticker} data={t} appUrl={appUrl} />
           ))}
 
           {hasMore && <ExploreMoreCta appUrl={appUrl} />}

@@ -14,9 +14,18 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import cors from "cors";
 import express from "express";
-import { ConfigError, loadConfig, saveConfig } from "./config.js";
 import { buildEvalContext } from "./eval-context.js";
 import { requireAuth, type AuthedRequest } from "./middleware/auth.js";
+import {
+  addIndicatorToCombo,
+  ComboError,
+  createCombo,
+  deleteCombo,
+  evaluateCombos,
+  listCombos,
+  removeIndicatorFromCombo,
+  updateCombo,
+} from "./services/combos.js";
 import { ensureDevUser, migrateDevUserJsonFiles } from "./services/dev-user.js";
 import {
   addToLibrary,
@@ -27,7 +36,6 @@ import {
 import { isDevAutoLogin } from "./supabase.js";
 import { getDb } from "./db.js";
 import { INDICATOR_METADATA, isIndicatorId } from "./indicator-registry.js";
-import { scoreDashboard } from "./scoring.js";
 import {
   ensureTickerData,
   NetworkError,
@@ -143,8 +151,9 @@ async function buildDashboard(
     )
     .filter((p): p is SmaPoint => p != null);
 
-  const { weights } = await loadConfig(userId);
-  const score = scoreDashboard(ctx, weights);
+  const combos = await listCombos(userId);
+  const comboStatuses = evaluateCombos(combos, ctx);
+  const anyGreen = comboStatuses.some((c) => c.green);
 
   return {
     ticker: sym,
@@ -153,7 +162,8 @@ async function buildDashboard(
     currentPrice: latest.close,
     priceChange: Number(priceChange.toFixed(2)),
     priceChangePct: Number(priceChangePct.toFixed(2)),
-    score,
+    combos: comboStatuses,
+    anyGreen,
     priceHistory,
     sma200Series,
   };
@@ -171,12 +181,14 @@ async function isTickerDataReady(ticker: string): Promise<boolean> {
 async function getWatchlistDisplayItem(
   userId: string,
   ticker: string,
+  totalCombos: number,
+  combosForUser: Awaited<ReturnType<typeof listCombos>>,
 ): Promise<WatchlistDisplayItem> {
   const security = await getSecurity(ticker);
   const name = security?.name ?? ticker;
   const ready = await isTickerDataReady(ticker);
   if (!ready) {
-    return { ticker, name, dataReady: false };
+    return { ticker, name, dataReady: false, totalCombos };
   }
 
   const db = await getDb();
@@ -187,7 +199,7 @@ async function getWatchlistDisplayItem(
   );
   const priceRows = priceReader.getRowObjectsJS();
   if (priceRows.length === 0) {
-    return { ticker, name, dataReady: false };
+    return { ticker, name, dataReady: false, totalCombos };
   }
 
   const prices: PriceRow[] = priceRows.map((r) => ({
@@ -205,8 +217,8 @@ async function getWatchlistDisplayItem(
     : 0;
 
   const ctx = buildEvalContext(prices);
-  const { weights } = await loadConfig(userId);
-  const score = scoreDashboard(ctx, weights);
+  const statuses = evaluateCombos(combosForUser, ctx);
+  const greenComboCount = statuses.filter((s) => s.green).length;
 
   return {
     ticker,
@@ -214,8 +226,8 @@ async function getWatchlistDisplayItem(
     dataReady: true,
     currentPrice: Number(latest.close.toFixed(2)),
     priceChangePct: Number(priceChangePct.toFixed(2)),
-    rating: score.rating,
-    percentage: score.percentage,
+    greenComboCount,
+    totalCombos,
   };
 }
 
@@ -241,6 +253,14 @@ function sendBackfillError(res: express.Response, err: unknown): void {
   const message = err instanceof Error ? err.message : "internal error";
   console.error("[backfill] unexpected:", err);
   res.status(500).json({ error: message, code: "INTERNAL" });
+}
+
+function sendComboError(res: express.Response, err: unknown): boolean {
+  if (err instanceof ComboError) {
+    res.status(err.status).json({ error: err.message, code: err.code });
+    return true;
+  }
+  return false;
 }
 
 async function bootstrap(): Promise<void> {
@@ -409,17 +429,7 @@ app.delete("/api/indicators/library/:id", async (req: AuthedRequest, res) => {
       res.status(400).json({ error: "missing id" });
       return;
     }
-    const userId = req.user!.id;
-    await removeFromLibrary(userId, id);
-
-    // Cascade: drop the indicator from any tier in user_configs.weights.
-    const current = await loadConfig(userId);
-    if (current.weights[id] !== undefined) {
-      const next = { ...current.weights };
-      delete next[id];
-      await saveConfig(userId, { weights: next });
-    }
-
+    await removeFromLibrary(req.user!.id, id);
     res.json({ ok: true, indicator_id: id });
   } catch (err) {
     if (err instanceof LibraryError) {
@@ -431,21 +441,114 @@ app.delete("/api/indicators/library/:id", async (req: AuthedRequest, res) => {
   }
 });
 
-app.get("/api/config", async (req: AuthedRequest, res) => {
+app.get("/api/combos", async (req: AuthedRequest, res) => {
   try {
-    res.json(await loadConfig(req.user!.id));
+    const combos = await listCombos(req.user!.id);
+    res.json({ combos });
   } catch (err) {
-    console.error("[/api/config GET] error:", err);
-    res.status(500).json({ error: "failed to load config" });
+    if (sendComboError(res, err)) return;
+    console.error("[/api/combos GET] error:", err);
+    res.status(500).json({ error: "failed to load combos" });
   }
 });
+
+app.post("/api/combos", async (req: AuthedRequest, res) => {
+  try {
+    const body = (req.body ?? {}) as { name?: unknown; indicatorIds?: unknown };
+    const combo = await createCombo(req.user!.id, {
+      name: body.name,
+      indicatorIds: body.indicatorIds,
+    });
+    res.json({ combo });
+  } catch (err) {
+    if (sendComboError(res, err)) return;
+    console.error("[/api/combos POST] error:", err);
+    res.status(500).json({ error: "failed to create combo" });
+  }
+});
+
+app.patch("/api/combos/:id", async (req: AuthedRequest, res) => {
+  try {
+    const id = req.params.id;
+    if (!id) {
+      res.status(400).json({ error: "missing id" });
+      return;
+    }
+    const body = (req.body ?? {}) as { name?: unknown; indicatorIds?: unknown };
+    const combo = await updateCombo(req.user!.id, id, body);
+    res.json({ combo });
+  } catch (err) {
+    if (sendComboError(res, err)) return;
+    console.error("[/api/combos PATCH] error:", err);
+    res.status(500).json({ error: "failed to update combo" });
+  }
+});
+
+app.delete("/api/combos/:id", async (req: AuthedRequest, res) => {
+  try {
+    const id = req.params.id;
+    if (!id) {
+      res.status(400).json({ error: "missing id" });
+      return;
+    }
+    await deleteCombo(req.user!.id, id);
+    res.json({ ok: true });
+  } catch (err) {
+    if (sendComboError(res, err)) return;
+    console.error("[/api/combos DELETE] error:", err);
+    res.status(500).json({ error: "failed to delete combo" });
+  }
+});
+
+app.post("/api/combos/:id/indicators", async (req: AuthedRequest, res) => {
+  try {
+    const id = req.params.id;
+    if (!id) {
+      res.status(400).json({ error: "missing id" });
+      return;
+    }
+    const body = (req.body ?? {}) as { indicatorId?: unknown };
+    const combo = await addIndicatorToCombo(req.user!.id, id, body.indicatorId);
+    res.json({ combo });
+  } catch (err) {
+    if (sendComboError(res, err)) return;
+    console.error("[/api/combos/:id/indicators POST] error:", err);
+    res.status(500).json({ error: "failed to add indicator" });
+  }
+});
+
+app.delete(
+  "/api/combos/:id/indicators/:indId",
+  async (req: AuthedRequest, res) => {
+    try {
+      const id = req.params.id;
+      const indId = req.params.indId;
+      if (!id || !indId) {
+        res.status(400).json({ error: "missing id" });
+        return;
+      }
+      const combo = await removeIndicatorFromCombo(req.user!.id, id, indId);
+      res.json({ combo });
+    } catch (err) {
+      if (sendComboError(res, err)) return;
+      console.error("[/api/combos/:id/indicators DELETE] error:", err);
+      res.status(500).json({ error: "failed to remove indicator" });
+    }
+  },
+);
 
 app.get("/api/watchlist", async (req: AuthedRequest, res) => {
   try {
     const userId = req.user!.id;
-    const tickers = await loadWatchlist(userId);
+    const [tickers, combosForUser] = await Promise.all([
+      loadWatchlist(userId),
+      listCombos(userId),
+    ]);
+    const totalCombos = combosForUser.length;
     const items = await Promise.all(
-      tickers.map((t) => getWatchlistDisplayItem(userId, t)),
+      tickers.map((t) =>
+        getWatchlistDisplayItem(userId, t, totalCombos, combosForUser),
+      ),
     );
     const payload: WatchlistResponse = { tickers: items };
     res.json(payload);
@@ -471,8 +574,12 @@ app.post("/api/watchlist", async (req: AuthedRequest, res) => {
     if (result.added) {
       kickBackfill(result.ticker);
     }
+    const combosForUser = await listCombos(userId);
+    const totalCombos = combosForUser.length;
     const items = await Promise.all(
-      result.tickers.map((t) => getWatchlistDisplayItem(userId, t)),
+      result.tickers.map((t) =>
+        getWatchlistDisplayItem(userId, t, totalCombos, combosForUser),
+      ),
     );
     const payload: WatchlistResponse & { added: boolean } = {
       tickers: items,
@@ -498,8 +605,12 @@ app.delete("/api/watchlist/:ticker", async (req: AuthedRequest, res) => {
     const userId = req.user!.id;
     const sym = sanitizeTicker(req.params.ticker);
     const result = await removeFromWatchlist(userId, sym);
+    const combosForUser = await listCombos(userId);
+    const totalCombos = combosForUser.length;
     const items = await Promise.all(
-      result.tickers.map((t) => getWatchlistDisplayItem(userId, t)),
+      result.tickers.map((t) =>
+        getWatchlistDisplayItem(userId, t, totalCombos, combosForUser),
+      ),
     );
     const payload: WatchlistResponse & { removed: boolean } = {
       tickers: items,
@@ -547,39 +658,6 @@ app.put("/api/preferences", async (req: AuthedRequest, res) => {
   } catch (err) {
     console.error("[/api/preferences PUT] error:", err);
     res.status(500).json({ error: "failed to save preferences" });
-  }
-});
-
-app.put("/api/config", async (req: AuthedRequest, res) => {
-  try {
-    const userId = req.user!.id;
-    const body = req.body as { weights?: Record<string, unknown> } | undefined;
-    if (body && typeof body === "object" && body.weights) {
-      const library = new Set(await listLibrary(userId));
-      const offending = Object.keys(body.weights).filter(
-        (id) => !library.has(id),
-      );
-      if (offending.length > 0) {
-        res.status(400).json({
-          error: `Indicators not in your library: ${offending.join(", ")}`,
-          code: "NOT_IN_LIBRARY",
-        });
-        return;
-      }
-    }
-    const saved = await saveConfig(userId, req.body);
-    res.json(saved);
-  } catch (err) {
-    if (err instanceof ConfigError) {
-      res.status(400).json({ error: err.message });
-      return;
-    }
-    if (err instanceof LibraryError) {
-      res.status(400).json({ error: err.message });
-      return;
-    }
-    console.error("[/api/config PUT] error:", err);
-    res.status(500).json({ error: "failed to save config" });
   }
 });
 

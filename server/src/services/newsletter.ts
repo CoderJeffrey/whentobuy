@@ -32,12 +32,12 @@ function getEnv(name: string): string {
 }
 
 export function getSubjectLine(tickers: EmailTickerData[]): string {
-  const buyCount = tickers.filter(
-    (t) => t.dataReady && (t.rating === "strong_buy" || t.rating === "weak_buy"),
+  const firingCount = tickers.filter(
+    (t) => t.dataReady && t.greenCombos.length > 0,
   ).length;
-  if (buyCount === 0) return "Your daily watchlist update";
-  if (buyCount === 1) return "1 stock in your watchlist looks favorable";
-  return `${buyCount} stocks in your watchlist look favorable`;
+  if (firingCount === 0) return "Your daily watchlist update";
+  if (firingCount === 1) return "1 stock has combos firing today";
+  return `${firingCount} stocks have combos firing today`;
 }
 
 export interface BuiltTickerData {
@@ -65,9 +65,7 @@ export async function buildEmailTickerData(
       s.currentPrice != null &&
       s.priceChange != null &&
       s.priceChangePct != null &&
-      s.percentage != null &&
-      s.rating != null &&
-      s.score != null
+      s.combos != null
     ) {
       return {
         ticker: s.ticker,
@@ -76,10 +74,10 @@ export async function buildEmailTickerData(
         currentPrice: s.currentPrice,
         priceChange: s.priceChange,
         priceChangePct: s.priceChangePct,
-        percentage: s.percentage,
-        rating: s.rating,
-        scoreTotal: s.score.total,
-        scoreMax: s.score.max,
+        greenCombos: s.combos
+          .filter((c) => c.green)
+          .map((c) => ({ comboId: c.comboId, name: c.name })),
+        totalCombos: s.totalCombos ?? s.combos.length,
       };
     }
     return { ticker: s.ticker, name: s.name, dataReady: false };

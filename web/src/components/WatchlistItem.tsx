@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { RATING_LABELS } from "../lib/ratings";
 import type { WatchlistItem as Item } from "../types";
 
 function formatChange(pct: number | undefined): {
@@ -40,6 +39,10 @@ export function WatchlistItem({ item, active, onRemove, removing }: Props) {
       ? "var(--bg-card-raised)"
       : "var(--bg-card)";
 
+  const greenCount = item.greenComboCount ?? 0;
+  const totalCombos = item.totalCombos ?? 0;
+  const anyGreen = greenCount > 0;
+
   return (
     <div
       onMouseEnter={() => setHovered(true)}
@@ -56,6 +59,7 @@ export function WatchlistItem({ item, active, onRemove, removing }: Props) {
       data-testid="watchlist-item"
       data-ticker={item.ticker}
       data-active={active ? "true" : "false"}
+      data-any-green={anyGreen ? "true" : "false"}
     >
       {confirming ? (
         <div className="px-3 py-3 flex items-center justify-between gap-2">
@@ -168,19 +172,34 @@ export function WatchlistItem({ item, active, onRemove, removing }: Props) {
             </div>
           )}
 
-          {item.dataReady && item.rating && (
+          {item.dataReady && (
             <div
-              className="mt-1 flex items-center gap-1.5 text-[11px]"
-              style={{ color: `var(--rating-${item.rating})` }}
+              className="mt-1.5 flex items-center gap-1.5 text-[11px]"
+              data-testid="watchlist-combo-status"
             >
-              <span style={{ fontWeight: 500 }}>
-                {RATING_LABELS[item.rating]}
+              <span
+                aria-hidden
+                className="inline-block w-1.5 h-1.5 rounded-full"
+                style={{
+                  backgroundColor: anyGreen
+                    ? "var(--positive)"
+                    : "var(--text-tertiary)",
+                }}
+              />
+              <span
+                style={{
+                  color: anyGreen
+                    ? "var(--positive)"
+                    : "var(--text-tertiary)",
+                  fontWeight: anyGreen ? 500 : 400,
+                }}
+              >
+                {totalCombos === 0
+                  ? "No combos"
+                  : anyGreen
+                    ? `${greenCount} ${greenCount === 1 ? "combo" : "combos"} green`
+                    : "No combos green"}
               </span>
-              {item.percentage != null && (
-                <span style={{ color: "var(--text-tertiary)" }}>
-                  · {item.percentage}%
-                </span>
-              )}
             </div>
           )}
         </Link>

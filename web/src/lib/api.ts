@@ -1,9 +1,9 @@
 import type {
   ApiErrorCode,
+  Combo,
   DashboardResponse,
   IndicatorMeta,
   Security,
-  UserConfig,
   WatchlistResponse,
 } from "../types";
 import { ApiError } from "../types";
@@ -96,19 +96,71 @@ export async function removeLibraryIndicator(id: string): Promise<void> {
   if (!res.ok) throw await readError(res);
 }
 
-export async function fetchConfig(): Promise<UserConfig> {
-  const res = await fetchWithAuth("/api/config");
+export async function fetchCombos(signal?: AbortSignal): Promise<Combo[]> {
+  const res = await fetchWithAuth("/api/combos", { signal });
   if (!res.ok) throw await readError(res);
-  return res.json();
+  const json = (await res.json()) as { combos: Combo[] };
+  return json.combos;
 }
 
-export async function saveConfig(config: UserConfig): Promise<UserConfig> {
-  const res = await fetchWithAuth("/api/config", {
-    method: "PUT",
-    body: JSON.stringify(config),
+export async function createCombo(input: {
+  name: string;
+  indicatorIds: string[];
+}): Promise<Combo> {
+  const res = await fetchWithAuth("/api/combos", {
+    method: "POST",
+    body: JSON.stringify(input),
   });
   if (!res.ok) throw await readError(res);
-  return res.json();
+  const json = (await res.json()) as { combo: Combo };
+  return json.combo;
+}
+
+export async function updateCombo(
+  comboId: string,
+  input: { name?: string; indicatorIds?: string[] },
+): Promise<Combo> {
+  const res = await fetchWithAuth(
+    `/api/combos/${encodeURIComponent(comboId)}`,
+    { method: "PATCH", body: JSON.stringify(input) },
+  );
+  if (!res.ok) throw await readError(res);
+  const json = (await res.json()) as { combo: Combo };
+  return json.combo;
+}
+
+export async function deleteCombo(comboId: string): Promise<void> {
+  const res = await fetchWithAuth(
+    `/api/combos/${encodeURIComponent(comboId)}`,
+    { method: "DELETE" },
+  );
+  if (!res.ok) throw await readError(res);
+}
+
+export async function addIndicatorToCombo(
+  comboId: string,
+  indicatorId: string,
+): Promise<Combo> {
+  const res = await fetchWithAuth(
+    `/api/combos/${encodeURIComponent(comboId)}/indicators`,
+    { method: "POST", body: JSON.stringify({ indicatorId }) },
+  );
+  if (!res.ok) throw await readError(res);
+  const json = (await res.json()) as { combo: Combo };
+  return json.combo;
+}
+
+export async function removeIndicatorFromCombo(
+  comboId: string,
+  indicatorId: string,
+): Promise<Combo> {
+  const res = await fetchWithAuth(
+    `/api/combos/${encodeURIComponent(comboId)}/indicators/${encodeURIComponent(indicatorId)}`,
+    { method: "DELETE" },
+  );
+  if (!res.ok) throw await readError(res);
+  const json = (await res.json()) as { combo: Combo };
+  return json.combo;
 }
 
 export async function searchSecurities(

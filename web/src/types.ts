@@ -1,12 +1,3 @@
-export type Rating =
-  | "strong_buy"
-  | "weak_buy"
-  | "hold"
-  | "weak_sell"
-  | "immediate_sell";
-
-export type Tier = "high" | "medium" | "low";
-
 export type IndicatorId = string;
 
 export type IndicatorCategory = string;
@@ -17,26 +8,6 @@ export interface IndicatorMeta {
   abbreviation: string;
   category: IndicatorCategory;
   description: string;
-}
-
-export interface ScoreBreakdownItem {
-  id: IndicatorId;
-  label: string;
-  abbreviation: string;
-  tier: Tier;
-  points: number;
-  triggered: boolean;
-  displayValue: string;
-}
-
-export interface Score {
-  total: number;
-  max: number;
-  percentage: number;
-  rating: Rating;
-  triggeredCount: number;
-  totalCount: number;
-  breakdown: ScoreBreakdownItem[];
 }
 
 export interface PriceBar {
@@ -53,6 +24,29 @@ export interface SmaPoint {
   value: number;
 }
 
+export interface ComboIndicatorStatus {
+  indicatorId: IndicatorId;
+  label: string;
+  abbreviation: string;
+  triggered: boolean;
+  displayValue: string;
+}
+
+export interface ComboStatus {
+  comboId: string;
+  name: string;
+  green: boolean;
+  indicators: ComboIndicatorStatus[];
+}
+
+export interface Combo {
+  id: string;
+  name: string;
+  indicatorIds: IndicatorId[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface DashboardResponse {
   ticker: string;
   name: string;
@@ -60,15 +54,10 @@ export interface DashboardResponse {
   currentPrice: number;
   priceChange: number;
   priceChangePct: number;
-  score: Score;
+  combos: ComboStatus[];
+  anyGreen: boolean;
   priceHistory: PriceBar[];
   sma200Series: SmaPoint[];
-}
-
-export type UserWeights = Partial<Record<IndicatorId, Tier>>;
-
-export interface UserConfig {
-  weights: UserWeights;
 }
 
 export interface Security {
@@ -83,8 +72,8 @@ export interface WatchlistItem {
   dataReady: boolean;
   currentPrice?: number;
   priceChangePct?: number;
-  rating?: Rating;
-  percentage?: number;
+  greenComboCount?: number;
+  totalCombos?: number;
 }
 
 export interface WatchlistResponse {
@@ -95,6 +84,9 @@ export type ApiErrorCode =
   | "TICKER_NOT_FOUND"
   | "RATE_LIMITED"
   | "NETWORK_ERROR"
+  | "COMBO_LIMIT"
+  | "COMBO_NOT_FOUND"
+  | "COMBO_ERROR"
   | "INTERNAL";
 
 export class ApiError extends Error {
