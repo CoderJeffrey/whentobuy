@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import cors from "cors";
 import express from "express";
 import { buildEvalContext } from "./eval-context.js";
+import { startDailyJob } from "./cron/scheduler.js";
 import { requireAuth, type AuthedRequest } from "./middleware/auth.js";
 import {
   addIndicatorToCombo,
@@ -682,5 +683,6 @@ bootstrap()
   .finally(() => {
     app.listen(PORT, () => {
       console.log(`[server] listening on http://localhost:${PORT}`);
+      startDailyJob();
     });
   });
