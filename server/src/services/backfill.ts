@@ -1,3 +1,4 @@
+import { DateTime } from "luxon";
 import YahooFinance from "yahoo-finance2";
 import type { ChartResultArray } from "yahoo-finance2/modules/chart";
 import { getDb } from "../db.js";
@@ -34,7 +35,13 @@ export function toYahooTicker(ticker: string): string {
 }
 
 function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  // Yahoo's bar `date` is an instant; the US daily session belongs to the
+  // exchange tz. Slicing the UTC date can land one day off (e.g. label a
+  // May 21 close as May 20), so resolve the date in America/New_York.
+  return (
+    DateTime.fromJSDate(d).setZone("America/New_York").toISODate() ??
+    d.toISOString().slice(0, 10)
+  );
 }
 
 function sqlLit(s: string): string {
