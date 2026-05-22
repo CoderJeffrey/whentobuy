@@ -7,6 +7,7 @@
     "dev": "tsx src/index.ts",
     "start": "tsx src/index.ts",
     "backfill": "tsx scripts/backfill.ts",
+    "refresh-prices": "tsx scripts/refresh-prices.ts",
     "fetch-sec-tickers": "tsx scripts/fetch-sec-tickers.ts",
     "newsletter": "tsx src/cron/newsletter.ts",
     "send-test-email": "tsx scripts/send-test-email.ts",
