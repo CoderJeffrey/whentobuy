@@ -95,6 +95,32 @@ async function markCache(ticker: string, status: "ok" | "failed"): Promise<void>
   );
 }
 
+export async function refreshAllCachedTickers(): Promise<{
+  ok: number;
+  failed: number;
+}> {
+  const db = await getDb();
+  const reader = await db.runAndReadAll(
+    `SELECT DISTINCT ticker FROM ticker_cache`,
+  );
+  const tickers = reader.getRowObjectsJS().map((r) => String(r.ticker));
+  console.log(`[refresh] refreshing ${tickers.length} ticker(s)`);
+
+  let ok = 0;
+  let failed = 0;
+  for (const t of tickers) {
+    try {
+      await ensureTickerData(t, { force: true });
+      ok += 1;
+    } catch (err) {
+      failed += 1;
+      console.warn(`[refresh] ${t} failed:`, err);
+    }
+  }
+  console.log(`[refresh] complete: ${ok} ok, ${failed} failed`);
+  return { ok, failed };
+}
+
 export async function ensureTickerData(
   ticker: string,
   opts: { force?: boolean } = {},
