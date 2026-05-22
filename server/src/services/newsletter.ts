@@ -174,12 +174,16 @@ async function sendOne(
 }
 
 export async function sendDailyNewsletter(): Promise<void> {
+  const subscribers = await listSubscribers();
+  console.log(`[newsletter] ${subscribers.length} subscriber(s)`);
+  if (subscribers.length === 0) {
+    console.log("[newsletter] no subscribers; skipping send");
+    return;
+  }
+
   const appUrl = getEnv("APP_URL");
   const emailFrom = getEnv("EMAIL_FROM");
   getResendClient();
-
-  const subscribers = await listSubscribers();
-  console.log(`[newsletter] ${subscribers.length} subscriber(s)`);
   const ownerEmail = process.env.OWNER_EMAIL;
   if (ownerEmail) {
     for (const s of subscribers) {
