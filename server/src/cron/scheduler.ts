@@ -18,11 +18,22 @@ function targetHourEt(): number {
   return Number.isInteger(h) && h >= 0 && h <= 23 ? h : 18;
 }
 
+function targetMinuteEt(): number {
+  const m = Number(process.env.DAILY_JOB_MINUTE_ET ?? 0);
+  return Number.isInteger(m) && m >= 0 && m <= 59 ? m : 0;
+}
+
+function targetLabel(): string {
+  const hh = String(targetHourEt()).padStart(2, "0");
+  const mm = String(targetMinuteEt()).padStart(2, "0");
+  return `${hh}:${mm} ET`;
+}
+
 function msUntilNextRun(): number {
   const now = nowEt();
   let next = now.set({
     hour: targetHourEt(),
-    minute: 0,
+    minute: targetMinuteEt(),
     second: 0,
     millisecond: 0,
   });
@@ -30,7 +41,7 @@ function msUntilNextRun(): number {
   return next.diff(now).toMillis();
 }
 
-async function runJob(): Promise<void> {
+export async function runDailyJob(): Promise<void> {
   const start = nowEt();
   console.log(`[daily-job] starting at ${start.toISO()}`);
   try {
@@ -57,7 +68,7 @@ function scheduleNext(): void {
   );
   // Re-arm via setTimeout (not a fixed 24h interval) so DST shifts stay aligned.
   const timer = setTimeout(() => {
-    void runJob().finally(scheduleNext);
+    void runDailyJob().finally(scheduleNext);
   }, delay);
   timer.unref?.();
 }
@@ -67,6 +78,6 @@ export function startDailyJob(): void {
     console.log("[daily-job] disabled (set DAILY_JOB_ENABLED=true to enable)");
     return;
   }
-  console.log(`[daily-job] enabled; target ${targetHourEt()}:00 ET`);
+  console.log(`[daily-job] enabled; target ${targetLabel()}`);
   scheduleNext();
 }
