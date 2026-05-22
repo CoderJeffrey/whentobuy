@@ -676,13 +676,13 @@ if (process.env.NODE_ENV === "production") {
   console.log(`[server] serving SPA from ${frontendPath}`);
 }
 
-bootstrap()
-  .catch((err) => {
-    console.error("[bootstrap] failed:", err);
-  })
-  .finally(() => {
-    app.listen(PORT, () => {
-      console.log(`[server] listening on http://localhost:${PORT}`);
-      startDailyJob();
+// Open the port first so Railway's healthcheck passes immediately, then warm
+// up (DB migrations, securities, dev backfills) in the background.
+app.listen(PORT, () => {
+  console.log(`[server] listening on http://localhost:${PORT}`);
+  bootstrap()
+    .then(() => startDailyJob())
+    .catch((err) => {
+      console.error("[bootstrap] failed:", err);
     });
-  });
+});
