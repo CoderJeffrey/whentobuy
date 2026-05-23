@@ -10,9 +10,11 @@ import {
 } from "../lib/api";
 import { ComboEditorModal } from "../components/ComboEditorModal";
 import { IndicatorDetailModal } from "../components/IndicatorDetailModal";
-import { PageHeader } from "../components/PageHeader";
 import type { Combo, IndicatorMeta } from "../types";
 import { ApiError } from "../types";
+import "./Indicators.css";
+
+const ALL_CATEGORIES = "All";
 
 const PAGE_SIZE = 20;
 const MAX_COMBOS = 5;
@@ -39,6 +41,7 @@ export default function Indicators() {
   const combos = combosQ.data ?? [];
 
   const [query, setQuery] = useState("");
+  const [category, setCategory] = useState<string>(ALL_CATEGORIES);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [detailMeta, setDetailMeta] = useState<IndicatorMeta | null>(null);
   const [editorState, setEditorState] = useState<EditorState>({ kind: "closed" });
@@ -126,21 +129,34 @@ export default function Indicators() {
     },
   });
 
+  const categories = useMemo(() => {
+    const all = marketplaceQ.data ?? [];
+    const counts = new Map<string, number>();
+    for (const m of all) {
+      counts.set(m.category, (counts.get(m.category) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  }, [marketplaceQ.data]);
+
   const filtered = useMemo(() => {
     const all = marketplaceQ.data ?? [];
     const q = query.trim().toLowerCase();
-    if (!q) return all;
-    return all.filter(
-      (m) =>
+    return all.filter((m) => {
+      if (category !== ALL_CATEGORIES && m.category !== category) return false;
+      if (!q) return true;
+      return (
         m.label.toLowerCase().includes(q) ||
         m.abbreviation.toLowerCase().includes(q) ||
-        m.description.toLowerCase().includes(q),
-    );
-  }, [marketplaceQ.data, query]);
+        m.description.toLowerCase().includes(q)
+      );
+    });
+  }, [marketplaceQ.data, query, category]);
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [query]);
+  }, [query, category]);
 
   const visible = filtered.slice(0, visibleCount);
   const hasMore = visibleCount < filtered.length;
@@ -165,6 +181,23 @@ export default function Indicators() {
   const total = marketplaceQ.data?.length ?? 0;
   const isLoading = marketplaceQ.isPending || combosQ.isPending;
 
+  const metaById = useMemo(() => {
+    const map = new Map<string, IndicatorMeta>();
+    for (const m of marketplaceQ.data ?? []) map.set(m.id, m);
+    return map;
+  }, [marketplaceQ.data]);
+
+  function comboSummary(combo: Combo): string {
+    const n = combo.indicatorIds.length;
+    const noun = n === 1 ? "indicator" : "indicators";
+    const abbrs = combo.indicatorIds
+      .map((id) => metaById.get(id)?.abbreviation)
+      .filter((a): a is string => Boolean(a));
+    if (abbrs.length === 0) return `${n} ${noun}`;
+    const shown = abbrs.slice(0, 3).join(" · ");
+    return `${n} ${noun} · ${shown}${abbrs.length > 3 ? " …" : ""}`;
+  }
+
   function openCreate(seedIndicatorId?: string) {
     if (atLimit) {
       flash(`Combo limit reached (${MAX_COMBOS}).`);
@@ -186,170 +219,185 @@ export default function Indicators() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-6">
-      <PageHeader
-        title="Indicators"
-        description="Combine indicators into combos. A combo turns GREEN when every indicator in it triggers."
-      />
+    <div className="ibg">
+      <div className="bg-grid" />
 
-      <section className="mt-2 mb-8" data-testid="combos-manager">
-        <div className="flex items-baseline justify-between mb-3">
-          <h2
-            className="text-[11px] tracking-label uppercase"
-            style={{ color: "var(--text-secondary)", fontWeight: 500 }}
-          >
-            Your Combos ({combos.length} / {MAX_COMBOS})
-          </h2>
-          <button
-            type="button"
-            onClick={() => openCreate()}
-            disabled={atLimit}
-            className="px-3 py-1.5 rounded-md text-xs tracking-label uppercase"
-            style={{
-              color: atLimit ? "var(--text-tertiary)" : "var(--accent)",
-              border: `1px solid ${
-                atLimit ? "var(--border)" : "var(--border-strong)"
-              }`,
-              backgroundColor: "transparent",
-              fontWeight: 500,
-              cursor: atLimit ? "not-allowed" : "pointer",
-            }}
-            title={atLimit ? `Combo limit reached (${MAX_COMBOS})` : undefined}
-            data-testid="combo-new"
-          >
-            + New Combo
-          </button>
-        </div>
+      <main className="main">
+        <header className="page-head">
+          <h1 className="page-title">Indicators</h1>
+          <p className="page-sub">
+            Combine indicators into <span className="hl">combos</span>. A combo
+            turns <span className="hl">green</span> when every indicator inside
+            it triggers on the same bar.
+          </p>
+        </header>
 
-        {combosQ.isPending ? (
-          <div
-            className="py-6 text-sm"
-            style={{ color: "var(--text-tertiary)" }}
-          >
-            Loading combos…
-          </div>
-        ) : combos.length === 0 ? (
-          <div
-            className="py-10 text-center text-sm rounded-xl"
-            style={{
-              color: "var(--text-secondary)",
-              backgroundColor: "var(--bg-card)",
-              border: "1px dashed var(--border)",
-            }}
-          >
-            No combos yet. Create one to get started.
-          </div>
-        ) : (
-          <div className="combos-grid">
-            {combos.map((c) => (
-              <ComboCard key={c.id} combo={c} onEdit={() => openEdit(c)} />
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section data-testid="indicator-library-section">
-        <h2
-          className="text-[11px] tracking-label uppercase mb-3"
-          style={{ color: "var(--text-secondary)", fontWeight: 500 }}
-        >
-          Indicator Library
-        </h2>
-
-        <div
-          className="mb-6 flex items-center gap-3 px-4 py-3 rounded-xl"
-          style={{
-            backgroundColor: "var(--bg-card)",
-            border: "1px solid var(--border)",
-          }}
-          data-testid="marketplace-search"
-        >
-          <span style={{ color: "var(--text-tertiary)" }} aria-hidden>
-            🔍
-          </span>
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={`Search ${total > 0 ? `${total}+ ` : ""}indicators...`}
-            className="flex-1 bg-transparent outline-none text-sm placeholder:text-(--text-tertiary)"
-            style={{ color: "var(--text-primary)" }}
-            autoComplete="off"
-            spellCheck={false}
-            data-testid="marketplace-search-input"
-          />
-          {query && (
+        {/* ===== Combos ===== */}
+        <section data-testid="combos-manager">
+          <div className="section-head">
+            <span className="section-title">
+              Your combos{" "}
+              <span className="count">
+                ({combos.length} / {MAX_COMBOS})
+              </span>
+            </span>
             <button
               type="button"
-              onClick={() => setQuery("")}
-              aria-label="Clear search"
-              className="text-base leading-none"
-              style={{ color: "var(--text-tertiary)" }}
+              className="new-btn"
+              onClick={() => openCreate()}
+              disabled={atLimit}
+              title={atLimit ? `Combo limit reached (${MAX_COMBOS})` : undefined}
+              data-testid="combo-new"
             >
-              ×
+              + NEW COMBO
             </button>
+          </div>
+
+          {combosQ.isPending ? (
+            <div className="combos-empty">Loading combos…</div>
+          ) : (
+            <div className="combos-grid">
+              {combos.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  className="combo-card"
+                  onClick={() => openEdit(c)}
+                  data-testid="combo-card"
+                  data-combo-id={c.id}
+                >
+                  <div className="combo-name">{c.name}</div>
+                  <div className="combo-count">{comboSummary(c)}</div>
+                  <div className="combo-foot">
+                    EDIT <span className="arrow">→</span>
+                  </div>
+                </button>
+              ))}
+              <button
+                type="button"
+                className="combo-card new-card"
+                onClick={() => openCreate()}
+                disabled={atLimit}
+                title={
+                  atLimit ? `Combo limit reached (${MAX_COMBOS})` : undefined
+                }
+                data-testid="combo-new-card"
+              >
+                <div className="plus">+</div>
+                <div className="lbl">NEW COMBO</div>
+              </button>
+            </div>
           )}
-        </div>
+        </section>
 
-        {isLoading && (
-          <div
-            className="py-16 text-center text-sm"
-            style={{ color: "var(--text-tertiary)" }}
-            data-testid="marketplace-loading"
-          >
-            Loading indicators…
+        {/* ===== Library ===== */}
+        <section data-testid="indicator-library-section">
+          <div className="section-head">
+            <span className="section-title">
+              Indicator library{" "}
+              {total > 0 && <span className="count">({total} available)</span>}
+            </span>
           </div>
-        )}
 
-        {!isLoading && filtered.length === 0 && (
-          <div
-            className="py-16 text-center text-sm"
-            style={{ color: "var(--text-tertiary)" }}
-            data-testid="marketplace-empty"
-          >
-            {query
-              ? `No indicators match "${query}".`
-              : "No indicators available."}
+          <div className="lib-search" data-testid="marketplace-search">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              aria-hidden
+            >
+              <circle cx="11" cy="11" r="7" />
+              <line x1="21" y1="21" x2="16.5" y2="16.5" />
+            </svg>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={`Search ${total > 0 ? `${total}+ ` : ""}indicators by name, code, or category…`}
+              autoComplete="off"
+              spellCheck={false}
+              data-testid="marketplace-search-input"
+            />
+            {query ? (
+              <button
+                type="button"
+                className="clear"
+                onClick={() => setQuery("")}
+                aria-label="Clear search"
+              >
+                ×
+              </button>
+            ) : (
+              <span className="kbd">⌘ K</span>
+            )}
           </div>
-        )}
 
-        {!isLoading && filtered.length > 0 && (
-          <div className="marketplace-grid" data-testid="marketplace-grid">
-            {visible.map((m) => (
-              <LibraryCard
-                key={m.id}
-                meta={m}
-                combos={combos}
-                onOpen={() => setDetailMeta(m)}
-              />
-            ))}
-          </div>
-        )}
+          {categories.length > 0 && (
+            <div className="cat-chips" data-testid="category-chips">
+              <button
+                type="button"
+                className={`chip${category === ALL_CATEGORIES ? " active" : ""}`}
+                onClick={() => setCategory(ALL_CATEGORIES)}
+              >
+                All <span className="num">{total}</span>
+              </button>
+              {categories.map((cat) => (
+                <button
+                  key={cat.name}
+                  type="button"
+                  className={`chip${category === cat.name ? " active" : ""}`}
+                  onClick={() => setCategory(cat.name)}
+                >
+                  {cat.name} <span className="num">{cat.count}</span>
+                </button>
+              ))}
+            </div>
+          )}
 
-        {hasMore && (
-          <div
-            ref={sentinelRef}
-            className="py-6 text-center text-xs tracking-label uppercase"
-            style={{ color: "var(--text-tertiary)" }}
-            data-testid="marketplace-sentinel"
-          >
-            Loading more…
-          </div>
-        )}
-      </section>
+          {isLoading && (
+            <div className="lib-state" data-testid="marketplace-loading">
+              Loading indicators…
+            </div>
+          )}
+
+          {!isLoading && filtered.length === 0 && (
+            <div className="lib-state" data-testid="marketplace-empty">
+              {query || category !== ALL_CATEGORIES
+                ? "No indicators match your filters."
+                : "No indicators available."}
+            </div>
+          )}
+
+          {!isLoading && filtered.length > 0 && (
+            <div className="ind-grid" data-testid="marketplace-grid">
+              {visible.map((m) => (
+                <LibraryCard
+                  key={m.id}
+                  meta={m}
+                  combos={combos}
+                  onOpen={() => setDetailMeta(m)}
+                />
+              ))}
+            </div>
+          )}
+
+          {hasMore && (
+            <div
+              ref={sentinelRef}
+              className="lib-sentinel"
+              data-testid="marketplace-sentinel"
+            >
+              Loading more…
+            </div>
+          )}
+        </section>
+      </main>
 
       {notice && (
-        <div
-          className="fixed bottom-6 right-6 text-[11px] px-3 py-2 rounded-md"
-          role="status"
-          style={{
-            color: "var(--text-secondary)",
-            backgroundColor: "var(--bg-card-raised)",
-            border: "1px solid var(--border)",
-            boxShadow: "0 6px 24px rgba(0,0,0,0.35)",
-          }}
-          data-testid="indicators-notice"
-        >
+        <div className="ind-notice" role="status" data-testid="indicators-notice">
           {notice}
         </div>
       )}
@@ -425,67 +473,7 @@ export default function Indicators() {
         />
       )}
 
-      <style>{`
-        .combos-grid {
-          display: grid;
-          gap: 12px;
-          grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-        }
-        .marketplace-grid {
-          display: grid;
-          gap: 16px;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-        @media (min-width: 900px) {
-          .marketplace-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-        }
-        @media (min-width: 1200px) {
-          .marketplace-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-        }
-        @media (min-width: 1440px) {
-          .marketplace-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-        }
-      `}</style>
     </div>
-  );
-}
-
-function ComboCard({ combo, onEdit }: { combo: Combo; onEdit: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onEdit}
-      className="text-left rounded-xl p-4 flex flex-col gap-3 transition-colors hover:[border-color:var(--border-strong)]"
-      style={{
-        backgroundColor: "var(--bg-card)",
-        border: "1px solid var(--border)",
-        minHeight: 120,
-      }}
-      data-testid="combo-card"
-      data-combo-id={combo.id}
-    >
-      <div
-        className="text-sm"
-        style={{ color: "var(--text-primary)", fontWeight: 500 }}
-      >
-        {combo.name}
-      </div>
-      <div
-        className="text-[11px]"
-        style={{ color: "var(--text-tertiary)" }}
-      >
-        {combo.indicatorIds.length}{" "}
-        {combo.indicatorIds.length === 1 ? "indicator" : "indicators"}
-      </div>
-      <div className="mt-auto flex items-center justify-between">
-        <span
-          className="text-[10px] tracking-label uppercase"
-          style={{ color: "var(--accent)" }}
-        >
-          Edit →
-        </span>
-      </div>
-    </button>
   );
 }
 
@@ -498,61 +486,41 @@ function LibraryCard({
   combos: Combo[];
   onOpen: () => void;
 }) {
-  const inCombos = combos.filter((c) => c.indicatorIds.includes(meta.id))
-    .length;
+  const inCombos = combos.filter((c) =>
+    c.indicatorIds.includes(meta.id),
+  ).length;
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="rounded-xl p-4 flex flex-col gap-3 transition-colors text-left"
-      style={{
-        backgroundColor: "var(--bg-card)",
-        border: "1px solid var(--border)",
-        minHeight: 168,
-      }}
+      className={`ind-card${inCombos > 0 ? " in-combo" : ""}`}
       data-testid="marketplace-card"
       data-card-id={meta.id}
     >
-      <div className="flex items-start justify-between gap-2">
-        <span
-          className="text-sm font-mono"
-          style={{ color: "var(--accent)", fontWeight: 600 }}
-        >
-          {meta.abbreviation}
-        </span>
+      <div className="ind-head">
+        <span className="ind-code">{meta.abbreviation}</span>
         {inCombos > 0 && (
           <span
-            className="text-[10px] tracking-label uppercase"
-            style={{ color: "var(--positive)" }}
+            className="ind-tag"
             title={`In ${inCombos} ${inCombos === 1 ? "combo" : "combos"}`}
           >
-            in {inCombos}
+            <span className="dot" />
+            IN {inCombos}
           </span>
         )}
       </div>
 
-      <div className="flex flex-col gap-1 flex-1">
-        <span
-          className="text-[13px] leading-snug"
-          style={{ color: "var(--text-primary)", fontWeight: 500 }}
-        >
-          {meta.label}
-        </span>
-        <span
-          className="text-xs leading-snug line-clamp-3"
-          style={{ color: "var(--text-secondary)" }}
-          title={meta.description}
-        >
-          {meta.description}
-        </span>
+      <div className="ind-name">{meta.label}</div>
+      <div className="ind-desc" title={meta.description}>
+        {meta.description}
       </div>
 
-      <span
-        className="text-[10px] tracking-label uppercase"
-        style={{ color: "var(--text-tertiary)" }}
-      >
-        Tap for details →
-      </span>
+      <div className="ind-foot">
+        <span className="cat">{meta.category}</span>
+        <span>
+          TAP <span className="arrow">→</span>
+        </span>
+      </div>
     </button>
   );
 }
