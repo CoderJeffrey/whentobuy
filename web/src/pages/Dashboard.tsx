@@ -12,7 +12,14 @@ function formatLastUpdated(asOf: string | undefined): string {
   if (!asOf) return "—";
   const d = new Date(`${asOf}T00:00:00Z`);
   if (Number.isNaN(d.getTime())) return asOf;
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  // `asOf` is a calendar trading date (YYYY-MM-DD), not an instant. Format it
+  // in UTC — the same zone it was parsed in — so it isn't shifted a day back
+  // for viewers west of UTC (e.g. ET would otherwise render May 22 as May 21).
+  return d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 function formatVolume(v: number | undefined): string {
