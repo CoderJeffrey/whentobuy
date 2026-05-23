@@ -2,20 +2,6 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { WatchlistItem as Item } from "../types";
 
-function formatChange(pct: number | undefined): {
-  text: string;
-  color: string;
-  arrow: string;
-} {
-  if (pct == null) return { text: "", color: "var(--text-tertiary)", arrow: "" };
-  const up = pct >= 0;
-  return {
-    text: `${up ? "+" : ""}${pct.toFixed(2)}%`,
-    color: up ? "var(--positive)" : "var(--negative)",
-    arrow: up ? "▲" : "▼",
-  };
-}
-
 interface Props {
   item: Item;
   active: boolean;
@@ -26,22 +12,16 @@ interface Props {
 export function WatchlistItem({ item, active, onRemove, removing }: Props) {
   const [hovered, setHovered] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const change = formatChange(item.priceChangePct);
-
-  const borderColor = active
-    ? "var(--accent)"
-    : hovered
-      ? "var(--border-strong)"
-      : "var(--border)";
-  const bg = active
-    ? "color-mix(in srgb, var(--accent) 10%, var(--bg-card))"
-    : hovered
-      ? "var(--bg-card-raised)"
-      : "var(--bg-card)";
 
   const greenCount = item.greenComboCount ?? 0;
   const totalCombos = item.totalCombos ?? 0;
   const anyGreen = greenCount > 0;
+
+  const up = (item.priceChangePct ?? 0) >= 0;
+  const chgText =
+    item.priceChangePct != null
+      ? `${up ? "+" : ""}${item.priceChangePct.toFixed(2)}%`
+      : "";
 
   return (
     <div
@@ -50,38 +30,22 @@ export function WatchlistItem({ item, active, onRemove, removing }: Props) {
         setHovered(false);
         setConfirming(false);
       }}
-      className="relative rounded-md transition-colors"
-      style={{
-        backgroundColor: bg,
-        border: `1px solid ${borderColor}`,
-        borderLeftWidth: active ? "3px" : "1px",
-      }}
+      className={`wl-item${active ? " active" : ""}`}
       data-testid="watchlist-item"
       data-ticker={item.ticker}
       data-active={active ? "true" : "false"}
       data-any-green={anyGreen ? "true" : "false"}
     >
       {confirming ? (
-        <div className="px-3 py-3 flex items-center justify-between gap-2">
-          <span
-            className="text-xs"
-            style={{ color: "var(--text-secondary)" }}
-          >
-            Remove {item.ticker}?
-          </span>
-          <div className="flex items-center gap-1">
+        <div className="wl-confirm">
+          <span className="q">Remove {item.ticker}?</span>
+          <div style={{ display: "flex", gap: 6 }}>
             <button
               type="button"
               disabled={removing}
               onClick={(e) => {
                 e.preventDefault();
                 onRemove(item.ticker);
-              }}
-              className="px-2 py-0.5 rounded text-xs"
-              style={{
-                backgroundColor: "var(--bg-subtle)",
-                color: "var(--negative)",
-                border: "1px solid var(--border-strong)",
               }}
               data-testid="watchlist-confirm-yes"
             >
@@ -93,12 +57,6 @@ export function WatchlistItem({ item, active, onRemove, removing }: Props) {
                 e.preventDefault();
                 setConfirming(false);
               }}
-              className="px-2 py-0.5 rounded text-xs"
-              style={{
-                backgroundColor: "var(--bg-subtle)",
-                color: "var(--text-secondary)",
-                border: "1px solid var(--border-strong)",
-              }}
               data-testid="watchlist-confirm-no"
             >
               No
@@ -108,23 +66,13 @@ export function WatchlistItem({ item, active, onRemove, removing }: Props) {
       ) : (
         <Link
           to={`/dashboard/${item.ticker}`}
-          className="block px-3 py-2.5"
+          style={{ display: "block" }}
           data-testid="watchlist-item-link"
         >
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              <div
-                className="font-mono text-sm"
-                style={{ color: "var(--accent)", fontWeight: 500 }}
-              >
-                {item.ticker}
-              </div>
-              <div
-                className="text-[11px] truncate"
-                style={{ color: "var(--text-tertiary)" }}
-              >
-                {item.name}
-              </div>
+          <div className="wl-row">
+            <div style={{ minWidth: 0 }}>
+              <div className="wl-tk">{item.ticker}</div>
+              <div className="wl-name">{item.name}</div>
             </div>
             {hovered && (
               <button
@@ -135,8 +83,7 @@ export function WatchlistItem({ item, active, onRemove, removing }: Props) {
                   setConfirming(true);
                 }}
                 aria-label={`Remove ${item.ticker}`}
-                className="text-sm leading-none shrink-0 mt-0.5"
-                style={{ color: "var(--text-tertiary)" }}
+                className="wl-remove"
                 data-testid="watchlist-remove"
               >
                 ✕
@@ -145,60 +92,35 @@ export function WatchlistItem({ item, active, onRemove, removing }: Props) {
           </div>
 
           {item.dataReady ? (
-            <div className="mt-1.5 flex items-center justify-between gap-2">
-              <div
-                className="font-mono text-sm"
-                style={{ color: "var(--text-primary)" }}
-              >
+            <div className="wl-price-row">
+              <span className="wl-price">
                 {item.currentPrice != null
                   ? `$${item.currentPrice.toFixed(2)}`
                   : "—"}
-              </div>
+              </span>
               {item.priceChangePct != null && (
-                <div
-                  className="font-mono text-[11px]"
-                  style={{ color: change.color }}
-                >
-                  {change.arrow} {change.text}
-                </div>
+                <span className={`wl-chg${up ? "" : " down"}`}>
+                  <span className="arrow" />
+                  {chgText}
+                </span>
               )}
             </div>
           ) : (
-            <div
-              className="mt-1.5 text-[11px]"
-              style={{ color: "var(--text-tertiary)" }}
-            >
-              Loading…
-            </div>
+            <div className="wl-loading">Loading…</div>
           )}
 
           {item.dataReady && (
             <div
-              className="mt-1.5 flex items-center gap-1.5 text-[11px]"
+              className={`wl-status${anyGreen ? " green" : ""}`}
               data-testid="watchlist-combo-status"
             >
-              <span
-                aria-hidden
-                className="inline-block w-1.5 h-1.5 rounded-full"
-                style={{
-                  backgroundColor: anyGreen
-                    ? "var(--positive)"
-                    : "var(--text-tertiary)",
-                }}
-              />
-              <span
-                style={{
-                  color: anyGreen
-                    ? "var(--positive)"
-                    : "var(--text-tertiary)",
-                  fontWeight: anyGreen ? 500 : 400,
-                }}
-              >
+              <span className="dot" aria-hidden />
+              <span>
                 {totalCombos === 0
                   ? "No combos"
                   : anyGreen
-                    ? `${greenCount} ${greenCount === 1 ? "combo" : "combos"} green`
-                    : "No combos green"}
+                    ? `${greenCount} ${greenCount === 1 ? "combo" : "combos"} triggered`
+                    : "No combos triggered"}
               </span>
             </div>
           )}

@@ -2,12 +2,26 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { fetchDashboard } from "../lib/api";
-import { NavBar } from "../components/NavBar";
 import { PriceChart } from "../components/PriceChart";
-import { TickerError } from "../components/TickerError";
-import { TickerLoading } from "../components/TickerLoading";
+import { SearchBar } from "../components/SearchBar";
 import { Watchlist } from "../components/Watchlist";
 import type { ComboStatus, DashboardResponse } from "../types";
+import "./Dashboard.css";
+
+function formatLastUpdated(asOf: string | undefined): string {
+  if (!asOf) return "—";
+  const d = new Date(`${asOf}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return asOf;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function formatVolume(v: number | undefined): string {
+  if (v == null) return "—";
+  if (v >= 1e9) return `${(v / 1e9).toFixed(2)}B`;
+  if (v >= 1e6) return `${(v / 1e6).toFixed(1)}M`;
+  if (v >= 1e3) return `${(v / 1e3).toFixed(1)}K`;
+  return String(v);
+}
 
 export default function Dashboard() {
   const { symbol } = useParams<{ symbol: string }>();
@@ -21,40 +35,57 @@ export default function Dashboard() {
   });
 
   return (
-    <div className="max-w-7xl mx-auto px-6">
-      <NavBar asOf={data?.asOf} />
+    <div className="dbg">
+      <div className="bg-grid" />
 
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_280px] xl:grid-cols-[1fr_300px] gap-6 pb-12">
-        <main className="min-w-0">
-          {isPending && <TickerLoading ticker={ticker} />}
+      <div className="dash-grid">
+        <main className="main">
+          <div className="topbar">
+            <SearchBar />
+            <div className="topbar-meta" data-testid="last-updated">
+              <span className="pulse" />
+              <span>Last updated · {formatLastUpdated(data?.asOf)}</span>
+            </div>
+          </div>
+
+          {isPending && (
+            <div className="card state-card">
+              Loading <span className="state-tk">{ticker}</span>…
+            </div>
+          )}
 
           {!isPending && error && (
-            <TickerError
-              ticker={ticker}
-              error={error}
-              onRetry={() => refetch()}
-            />
+            <div className="card state-card">
+              <div>
+                Couldn’t load <span className="state-tk">{ticker}</span>.
+                <br />
+                {error instanceof Error ? error.message : "Something went wrong."}
+              </div>
+              <button
+                type="button"
+                className="state-retry"
+                onClick={() => refetch()}
+              >
+                Retry →
+              </button>
+            </div>
           )}
 
           {data && !error && (
             <div
-              className="flex flex-col gap-8"
               data-testid="dashboard-loaded"
               data-fetching={isFetching ? "true" : "false"}
             >
               <TickerHero data={data} />
               <CombosSection combos={data.combos} />
-              <PriceChart
-                priceHistory={data.priceHistory}
-                sma200Series={data.sma200Series}
-              />
+              <ChartCard data={data} />
             </div>
           )}
         </main>
 
-        <div className="md:sticky md:top-4 md:self-start">
+        <aside className="watchlist-panel">
           <Watchlist activeTicker={ticker} />
-        </div>
+        </aside>
       </div>
     </div>
   );
@@ -62,103 +93,71 @@ export default function Dashboard() {
 
 function TickerHero({ data }: { data: DashboardResponse }) {
   const positive = data.priceChange >= 0;
-  const arrow = positive ? "▲" : "▼";
   const sign = data.priceChangePct >= 0 ? "+" : "";
+  const last = data.priceHistory[data.priceHistory.length - 1];
+  const prev = data.priceHistory[data.priceHistory.length - 2];
+
   return (
-    <section
-      className="rounded-2xl p-8 flex flex-col gap-2"
-      style={{
-        backgroundColor: "var(--bg-card)",
-        border: "1px solid var(--border)",
-      }}
-      data-testid="ticker-hero"
-    >
-      <div className="flex items-baseline gap-3 flex-wrap">
-        <span
-          className="font-mono text-2xl"
-          style={{ color: "var(--accent)", fontWeight: 600, letterSpacing: "0.04em" }}
-        >
-          {data.ticker}
-        </span>
-        <span
-          className="text-sm"
-          style={{ color: "var(--text-secondary)" }}
-        >
-          · {data.name}
-        </span>
+    <div className="card ticker-card" data-testid="ticker-hero">
+      <div className="ticker-head">
+        <span className="ticker-symbol">{data.ticker}</span>
+        <span className="ticker-sep">·</span>
+        <span className="ticker-name">{data.name}</span>
       </div>
-      <div className="flex items-baseline gap-3 flex-wrap">
-        <span
-          className="font-mono text-3xl"
-          style={{ color: "var(--text-primary)", fontWeight: 500 }}
-        >
-          ${data.currentPrice.toFixed(2)}
-        </span>
-        <span
-          className="font-mono text-sm"
-          style={{ color: positive ? "var(--positive)" : "var(--negative)" }}
-        >
-          {arrow} {sign}
+      <div className="ticker-pricing">
+        <span className="ticker-price">${data.currentPrice.toFixed(2)}</span>
+        <span className={`ticker-chg${positive ? "" : " down"}`}>
+          <span className="arrow" />
+          {sign}
           {data.priceChange.toFixed(2)} ({sign}
           {data.priceChangePct.toFixed(2)}%)
         </span>
       </div>
-    </section>
+      <div className="ticker-meta">
+        <div className="meta-cell">
+          <div className="label">Open</div>
+          <div className="value">{last ? `$${last.open.toFixed(2)}` : "—"}</div>
+        </div>
+        <div className="meta-cell">
+          <div className="label">Day range</div>
+          <div className="value">
+            {last ? `${last.low.toFixed(2)} – ${last.high.toFixed(2)}` : "—"}
+          </div>
+        </div>
+        <div className="meta-cell">
+          <div className="label">Volume</div>
+          <div className="value">{formatVolume(last?.volume)}</div>
+        </div>
+        <div className="meta-cell">
+          <div className="label">Prev close</div>
+          <div className="value">
+            {prev ? `$${prev.close.toFixed(2)}` : "—"}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
 function CombosSection({ combos }: { combos: ComboStatus[] }) {
   return (
-    <section
-      className="rounded-2xl p-6 sm:p-8 flex flex-col gap-4"
-      style={{
-        backgroundColor: "var(--bg-card)",
-        border: "1px solid var(--border)",
-      }}
-      data-testid="combos-section"
-    >
-      <div className="flex items-baseline justify-between">
-        <h2
-          className="text-[11px] tracking-label uppercase"
-          style={{ color: "var(--text-secondary)", fontWeight: 500 }}
-        >
-          Your Combos
-        </h2>
-        <Link
-          to="/indicators"
-          className="text-[11px] tracking-label uppercase"
-          style={{ color: "var(--accent)" }}
-        >
-          Manage →
+    <div className="card combos-card" data-testid="combos-section">
+      <div className="card-head">
+        <span className="card-title">Your combos</span>
+        <Link to="/indicators" className="card-action">
+          MANAGE →
         </Link>
       </div>
 
       {combos.length === 0 ? (
-        <div
-          className="py-10 text-center text-sm rounded-xl"
-          style={{
-            color: "var(--text-secondary)",
-            backgroundColor: "var(--bg-card-raised)",
-            border: "1px dashed var(--border)",
-          }}
-          data-testid="combos-empty"
-        >
+        <div className="combos-empty" data-testid="combos-empty">
           No combos yet.{" "}
-          <Link
-            to="/indicators"
-            style={{ color: "var(--accent)" }}
-          >
-            Create one in the Indicators tab →
-          </Link>
+          <Link to="/indicators">Create one in the Indicators tab →</Link>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          {combos.map((combo) => (
-            <ComboRow key={combo.comboId} combo={combo} />
-          ))}
-        </div>
+        combos.map((combo) => <ComboRow key={combo.comboId} combo={combo} />)
       )}
-    </section>
+    </div>
   );
 }
 
@@ -166,135 +165,69 @@ function ComboRow({ combo }: { combo: ComboStatus }) {
   const [expanded, setExpanded] = useState(false);
   const triggeredCount = combo.indicators.filter((i) => i.triggered).length;
   const totalCount = combo.indicators.length;
+  const conditions = combo.indicators
+    .map((i) => i.abbreviation || i.label)
+    .join(", ");
 
   return (
-    <div
-      className="rounded-xl overflow-hidden"
-      style={{
-        backgroundColor: "var(--bg-card-raised)",
-        border: `1px solid ${combo.green ? "color-mix(in srgb, var(--positive) 50%, var(--border))" : "var(--border)"}`,
-      }}
-      data-testid="combo-row"
-      data-combo-id={combo.comboId}
-      data-green={combo.green ? "true" : "false"}
-    >
+    <>
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="w-full px-4 py-4 flex items-center gap-3 text-left transition-colors"
         aria-expanded={expanded}
+        className={`combo-row${combo.green ? " green" : ""}`}
+        data-testid="combo-row"
+        data-combo-id={combo.comboId}
+        data-green={combo.green ? "true" : "false"}
       >
-        <span
-          aria-hidden
-          className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
-          style={{
-            backgroundColor: combo.green
-              ? "var(--positive)"
-              : "var(--text-tertiary)",
-            boxShadow: combo.green
-              ? "0 0 0 3px color-mix(in srgb, var(--positive) 18%, transparent)"
-              : "none",
-          }}
-        />
-        <div className="flex-1 min-w-0">
-          <div
-            className="text-sm truncate"
-            style={{ color: "var(--text-primary)", fontWeight: 500 }}
-          >
-            {combo.name}
-          </div>
-          <div
-            className="text-[11px] mt-0.5"
-            style={{ color: "var(--text-tertiary)" }}
-          >
-            {triggeredCount} / {totalCount} triggered
+        <span className="combo-status-dot" aria-hidden />
+        <div className="combo-body">
+          <div className="combo-name">{combo.name}</div>
+          <div className="combo-detail">
+            {triggeredCount} / {totalCount} conditions triggered
+            {conditions ? ` · ${conditions}` : ""}
           </div>
         </div>
-        <span
-          className="text-[11px] tracking-label uppercase font-mono shrink-0"
-          style={{
-            color: combo.green ? "var(--positive)" : "var(--text-tertiary)",
-            fontWeight: combo.green ? 600 : 400,
-          }}
-        >
-          {combo.green ? "GREEN" : "not green"}
-        </span>
-        <span
-          aria-hidden
-          className="text-xs shrink-0"
-          style={{ color: "var(--text-tertiary)" }}
-        >
-          {expanded ? "▾" : "▸"}
+        <span className="combo-flag">
+          {combo.green ? "TRIGGERED →" : "NOT TRIGGERED →"}
         </span>
       </button>
 
       {expanded && (
-        <div
-          className="px-4 pb-4 pt-1 flex flex-col gap-2"
-          data-testid="combo-detail"
-        >
+        <div className="combo-detail-list" data-testid="combo-detail">
           {combo.indicators.length === 0 && (
-            <div
-              className="text-xs italic"
-              style={{ color: "var(--text-tertiary)" }}
-            >
-              No indicators in this combo.
-            </div>
+            <div className="wl-hint">No indicators in this combo.</div>
           )}
           {combo.indicators.map((ind) => (
             <div
               key={ind.indicatorId}
-              className="flex items-center gap-3 rounded-md px-3 py-2"
-              style={{
-                backgroundColor: "var(--bg-card)",
-                border: "1px solid var(--border)",
-              }}
+              className={`combo-ind ${ind.triggered ? "on" : "off"}`}
               data-testid="combo-indicator"
               data-triggered={ind.triggered ? "true" : "false"}
             >
-              <span
-                aria-hidden
-                className="font-mono text-sm shrink-0"
-                style={{
-                  color: ind.triggered
-                    ? "var(--positive)"
-                    : "var(--text-tertiary)",
-                  width: "1ch",
-                }}
-              >
+              <span className="mark" aria-hidden>
                 {ind.triggered ? "✓" : "✗"}
               </span>
-              <div className="flex-1 min-w-0">
-                <div
-                  className="text-sm"
-                  style={{
-                    color: ind.triggered
-                      ? "var(--text-primary)"
-                      : "var(--text-secondary)",
-                    fontWeight: 500,
-                  }}
-                >
-                  {ind.label}
-                </div>
+              <div className="ind-label">
+                {ind.label}
                 {ind.abbreviation && (
-                  <div
-                    className="text-[10px] font-mono"
-                    style={{ color: "var(--text-tertiary)" }}
-                  >
-                    {ind.abbreviation}
-                  </div>
+                  <span className="ind-abbr"> · {ind.abbreviation}</span>
                 )}
               </div>
-              <div
-                className="font-mono text-xs shrink-0"
-                style={{ color: "var(--text-tertiary)" }}
-              >
-                {ind.displayValue}
-              </div>
+              <div className="ind-value">{ind.displayValue}</div>
             </div>
           ))}
         </div>
       )}
-    </div>
+    </>
+  );
+}
+
+function ChartCard({ data }: { data: DashboardResponse }) {
+  return (
+    <PriceChart
+      priceHistory={data.priceHistory}
+      sma200Series={data.sma200Series}
+    />
   );
 }
