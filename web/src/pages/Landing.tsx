@@ -728,23 +728,12 @@ export default function Landing() {
             </div>
             <div className="foot-col">
               <h4>Product</h4>
-              <a href="#builder">Alert builder</a>
-              <a href="#indicators">Indicator library</a>
-              <a href="#digest">Digest archive</a>
-              <a href="#">Changelog</a>
-            </div>
-            <div className="foot-col">
-              <h4>Developers</h4>
-              <a href="#">Documentation</a>
-              <a href="#">Expression syntax</a>
-              <a href="#">API reference</a>
-              <a href="#">Webhooks</a>
+              <a href="/dashboard">Dashboard</a>
+              <a href="#digest">Newsletter</a>
             </div>
             <div className="foot-col">
               <h4>Company</h4>
               <a href="#">About</a>
-              <a href="#digest">Digest</a>
-              <a href="#">Privacy</a>
               <a href="#">Terms</a>
             </div>
           </div>
