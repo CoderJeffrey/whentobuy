@@ -207,6 +207,7 @@ export async function removeWatchlistTicker(
 
 export interface UserPreferences {
   newsletter_enabled: boolean;
+  time_zone: string;
 }
 
 export async function fetchPreferences(): Promise<UserPreferences> {
@@ -216,12 +217,18 @@ export async function fetchPreferences(): Promise<UserPreferences> {
 }
 
 export async function savePreferences(
-  prefs: UserPreferences,
+  prefs: Partial<UserPreferences>,
 ): Promise<UserPreferences> {
   const res = await fetchWithAuth("/api/preferences", {
     method: "PUT",
     body: JSON.stringify(prefs),
   });
+  if (!res.ok) throw await readError(res);
+  return res.json();
+}
+
+export async function deleteAccount(): Promise<{ ok: boolean }> {
+  const res = await fetchWithAuth("/api/account", { method: "DELETE" });
   if (!res.ok) throw await readError(res);
   return res.json();
 }

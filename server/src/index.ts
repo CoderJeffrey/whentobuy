@@ -34,7 +34,7 @@ import {
   listLibrary,
   removeFromLibrary,
 } from "./services/indicator-library.js";
-import { isDevAutoLogin } from "./supabase.js";
+import { devUserId, isDevAutoLogin } from "./supabase.js";
 import { getDb } from "./db.js";
 import { INDICATOR_METADATA, isIndicatorId } from "./indicator-registry.js";
 import {
@@ -63,9 +63,12 @@ import {
   WatchlistError,
 } from "./watchlist.js";
 import {
+  deleteUserAccount,
   findByUnsubscribeToken,
   getPreferences,
+  isValidTimeZone,
   setNewsletterEnabled,
+  setTimeZone,
 } from "./services/preferences.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
@@ -632,10 +635,17 @@ app.delete("/api/watchlist/:ticker", async (req: AuthedRequest, res) => {
   }
 });
 
+function prefsView(prefs: { newsletterEnabled: boolean; timeZone: string }) {
+  return {
+    newsletter_enabled: prefs.newsletterEnabled,
+    time_zone: prefs.timeZone,
+  };
+}
+
 app.get("/api/preferences", async (req: AuthedRequest, res) => {
   try {
     const prefs = await getPreferences(req.user!.id);
-    res.json({ newsletter_enabled: prefs.newsletterEnabled });
+    res.json(prefsView(prefs));
   } catch (err) {
     console.error("[/api/preferences GET] error:", err);
     res.status(500).json({ error: "failed to load preferences" });
@@ -644,21 +654,63 @@ app.get("/api/preferences", async (req: AuthedRequest, res) => {
 
 app.put("/api/preferences", async (req: AuthedRequest, res) => {
   try {
-    const body = req.body as { newsletter_enabled?: unknown };
-    if (typeof body?.newsletter_enabled !== "boolean") {
+    const body = req.body as {
+      newsletter_enabled?: unknown;
+      time_zone?: unknown;
+    };
+    const hasNewsletter = body?.newsletter_enabled !== undefined;
+    const hasTimeZone = body?.time_zone !== undefined;
+
+    if (!hasNewsletter && !hasTimeZone) {
       res
         .status(400)
-        .json({ error: "newsletter_enabled (boolean) is required" });
+        .json({ error: "newsletter_enabled or time_zone is required" });
       return;
     }
-    const prefs = await setNewsletterEnabled(
-      req.user!.id,
-      body.newsletter_enabled,
-    );
-    res.json({ newsletter_enabled: prefs.newsletterEnabled });
+    if (hasNewsletter && typeof body.newsletter_enabled !== "boolean") {
+      res.status(400).json({ error: "newsletter_enabled must be a boolean" });
+      return;
+    }
+    if (
+      hasTimeZone &&
+      (typeof body.time_zone !== "string" || !isValidTimeZone(body.time_zone))
+    ) {
+      res.status(400).json({ error: "time_zone must be a valid IANA zone" });
+      return;
+    }
+
+    const userId = req.user!.id;
+    let prefs = await getPreferences(userId);
+    if (hasNewsletter) {
+      prefs = await setNewsletterEnabled(
+        userId,
+        body.newsletter_enabled as boolean,
+      );
+    }
+    if (hasTimeZone) {
+      prefs = await setTimeZone(userId, body.time_zone as string);
+    }
+    res.json(prefsView(prefs));
   } catch (err) {
     console.error("[/api/preferences PUT] error:", err);
     res.status(500).json({ error: "failed to save preferences" });
+  }
+});
+
+app.delete("/api/account", async (req: AuthedRequest, res) => {
+  try {
+    const userId = req.user!.id;
+    if (isDevAutoLogin() && userId === devUserId()) {
+      res
+        .status(403)
+        .json({ error: "the dev user account cannot be deleted" });
+      return;
+    }
+    await deleteUserAccount(userId);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[/api/account DELETE] error:", err);
+    res.status(500).json({ error: "failed to delete account" });
   }
 });
 
