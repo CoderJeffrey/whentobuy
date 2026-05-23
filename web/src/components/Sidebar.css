@@ -1,0 +1,113 @@
+/* Shared app sidebar — monochrome glass, consistent with the redesign.
+   Scoped under `.ihsb`. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+.ihsb {
+  --s-fg: #ffffff;
+  --s-fg-2: rgba(255, 255, 255, 0.7);
+  --s-fg-3: rgba(255, 255, 255, 0.45);
+  --s-fg-4: rgba(255, 255, 255, 0.28);
+  --s-border: rgba(255, 255, 255, 0.08);
+  --s-border-strong: rgba(255, 255, 255, 0.18);
+  --s-surface: rgba(255, 255, 255, 0.025);
+  --s-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --s-sans: 'Inter', system-ui, -apple-system, sans-serif;
+
+  display: flex;
+  flex-direction: column;
+  width: 60px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  padding: 22px 12px;
+  font-family: var(--s-sans);
+  color: var(--s-fg);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.015) 0%, transparent 100%),
+    #000000;
+  border-right: 1px solid var(--s-border);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+@media (min-width: 1280px) {
+  .ihsb { width: 248px; padding: 22px 18px; }
+}
+.ihsb a { color: inherit; text-decoration: none; }
+.ihsb button { font-family: inherit; cursor: pointer; }
+
+.ihsb .brand {
+  display: flex; align-items: center; gap: 10px;
+  padding: 4px 6px 22px;
+  font-weight: 600; font-size: 15px; letter-spacing: -0.01em;
+}
+.ihsb .brand-mark {
+  width: 26px; height: 26px; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: #ffffff; color: #000000;
+  border-radius: 7px;
+  font-family: var(--s-mono); font-weight: 700; font-size: 15px;
+  box-shadow: 0 0 16px rgba(255,255,255,0.3);
+}
+.ihsb .brand-name { display: none; }
+@media (min-width: 1280px) { .ihsb .brand-name { display: inline; } }
+
+.ihsb .nav-section { display: flex; flex-direction: column; gap: 2px; }
+.ihsb .nav-section .label {
+  display: none;
+  font-family: var(--s-mono); font-size: 10px; color: var(--s-fg-4);
+  letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 14px 10px 6px;
+}
+@media (min-width: 1280px) { .ihsb .nav-section .label { display: block; } }
+
+.ihsb .nav-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 14px; color: var(--s-fg-2);
+  border: 1px solid transparent;
+  transition: all .15s ease;
+  position: relative;
+}
+.ihsb .nav-item svg { width: 18px; height: 18px; opacity: 0.85; flex-shrink: 0; }
+.ihsb .nav-item .nav-label { display: none; }
+@media (min-width: 1280px) { .ihsb .nav-item .nav-label { display: inline; } }
+.ihsb .nav-item:hover { background: rgba(255,255,255,0.04); color: var(--s-fg); }
+.ihsb .nav-item.active {
+  background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+  color: var(--s-fg);
+  border: 1px solid var(--s-border-strong);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset;
+}
+.ihsb .nav-item.active::before {
+  content: ""; position: absolute; left: -12px; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 18px;
+  background: #ffffff; border-radius: 0 3px 3px 0;
+  box-shadow: 0 0 12px rgba(255,255,255,0.5);
+}
+@media (min-width: 1280px) { .ihsb .nav-item.active::before { left: -18px; } }
+
+.ihsb .spacer { flex: 1; }
+
+.ihsb .user-card {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--s-border);
+  border-radius: 10px;
+  background: var(--s-surface);
+  margin-bottom: 8px;
+}
+.ihsb .user-avatar {
+  width: 32px; height: 32px; flex-shrink: 0;
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.2), rgba(255,255,255,0.05));
+  border: 1px solid var(--s-border-strong);
+  display: grid; place-items: center;
+  font-family: var(--s-mono); font-weight: 600; font-size: 12px;
+  object-fit: cover;
+}
+.ihsb .user-info { min-width: 0; flex: 1; display: none; }
+@media (min-width: 1280px) { .ihsb .user-info { display: block; } }
+.ihsb .user-name { font-size: 13px; font-weight: 500; color: var(--s-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ihsb .user-email { font-size: 11px; color: var(--s-fg-3); font-family: var(--s-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -10,6 +10,7 @@ export function SearchBar() {
   const [debounced, setDebounced] = useState("");
   const [open, setOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
+  const [focused, setFocused] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -25,7 +26,8 @@ export function SearchBar() {
   });
 
   const results: Security[] = debounced ? (searchQ.data ?? []) : [];
-  const safeIdx = results.length > 0 ? Math.min(activeIdx, results.length - 1) : 0;
+  const safeIdx =
+    results.length > 0 ? Math.min(activeIdx, results.length - 1) : 0;
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -64,83 +66,65 @@ export function SearchBar() {
     }
   }
 
-  const [focused, setFocused] = useState(false);
-
   return (
-    <div ref={containerRef} className="relative w-full max-w-md">
-      <div
-        className="flex items-center gap-2 px-3 py-2 rounded-md transition-colors"
-        style={{
-          backgroundColor: "var(--bg-subtle)",
-          border: `1px solid ${focused ? "var(--border-strong)" : "var(--border)"}`,
-        }}
+    <div ref={containerRef} className={`search${focused ? " focused" : ""}`}>
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        aria-hidden
       >
-        <span style={{ color: "var(--text-tertiary)" }} aria-hidden>
-          🔍
-        </span>
-        <input
-          type="text"
-          value={q}
-          onChange={(e) => {
-            setQ(e.target.value);
-            setOpen(true);
+        <circle cx="11" cy="11" r="7" />
+        <line x1="21" y1="21" x2="16.5" y2="16.5" />
+      </svg>
+      <input
+        type="text"
+        value={q}
+        onChange={(e) => {
+          setQ(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => {
+          setOpen(true);
+          setFocused(true);
+        }}
+        onBlur={() => setFocused(false)}
+        onKeyDown={onKeyDown}
+        placeholder="Search stocks, indicators, combos…"
+        data-testid="search-input"
+        aria-label="Search stocks"
+        autoComplete="off"
+        spellCheck={false}
+      />
+      {q ? (
+        <button
+          type="button"
+          onClick={() => {
+            setQ("");
+            setDebounced("");
+            setOpen(false);
           }}
-          onFocus={() => {
-            setOpen(true);
-            setFocused(true);
-          }}
-          onBlur={() => setFocused(false)}
-          onKeyDown={onKeyDown}
-          placeholder="Search stocks..."
-          className="flex-1 bg-transparent outline-none text-sm placeholder:text-[color:var(--text-tertiary)]"
-          style={{ color: "var(--text-primary)" }}
-          data-testid="search-input"
-          aria-label="Search stocks"
-          autoComplete="off"
-          spellCheck={false}
-        />
-        {q && (
-          <button
-            type="button"
-            onClick={() => {
-              setQ("");
-              setDebounced("");
-              setOpen(false);
-            }}
-            aria-label="Clear search"
-            className="text-base leading-none"
-            style={{ color: "var(--text-tertiary)" }}
-            data-testid="search-clear"
-          >
-            ×
-          </button>
-        )}
-      </div>
+          aria-label="Clear search"
+          className="kbd"
+          style={{ cursor: "pointer" }}
+          data-testid="search-clear"
+        >
+          ✕
+        </button>
+      ) : (
+        <span className="kbd">⌘ K</span>
+      )}
 
       {open && debounced && (
-        <div
-          className="absolute left-0 right-0 mt-1 rounded-md overflow-hidden z-50"
-          style={{
-            backgroundColor: "var(--bg-card)",
-            border: "1px solid var(--border-strong)",
-            boxShadow: "0 12px 32px rgba(0, 0, 0, 0.45)",
-          }}
-          data-testid="search-dropdown"
-        >
+        <div className="search-dropdown" data-testid="search-dropdown">
           {searchQ.isFetching && results.length === 0 && (
-            <div
-              className="px-3 py-3 text-xs"
-              style={{ color: "var(--text-tertiary)" }}
-            >
-              Searching…
-            </div>
+            <div className="search-empty">Searching…</div>
           )}
           {!searchQ.isFetching && results.length === 0 && (
-            <div
-              className="px-3 py-3 text-xs"
-              style={{ color: "var(--text-tertiary)" }}
-              data-testid="search-empty"
-            >
+            <div className="search-empty" data-testid="search-empty">
               No matches.
             </div>
           )}
@@ -152,31 +136,13 @@ export function SearchBar() {
                 type="button"
                 onClick={() => pick(sec)}
                 onMouseEnter={() => setActiveIdx(i)}
-                className="w-full text-left px-3 py-2 flex flex-col gap-0.5"
-                style={{
-                  backgroundColor: active
-                    ? "var(--bg-card-raised)"
-                    : "transparent",
-                }}
+                className={`search-result${active ? " active" : ""}`}
                 data-testid="search-result"
                 data-ticker={sec.ticker}
                 data-active={active ? "true" : "false"}
               >
-                <span
-                  className="font-mono text-sm"
-                  style={{
-                    color: "var(--accent)",
-                    fontWeight: 500,
-                  }}
-                >
-                  {sec.ticker}
-                </span>
-                <span
-                  className="text-xs truncate"
-                  style={{ color: "var(--text-secondary)" }}
-                >
-                  {sec.name}
-                </span>
+                <span className="tk">{sec.ticker}</span>
+                <span className="nm">{sec.name}</span>
               </button>
             );
           })}

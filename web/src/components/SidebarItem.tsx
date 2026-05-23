@@ -16,40 +16,10 @@ export function SidebarItem({ to, label, icon: Icon, end }: Props) {
       title={label}
       data-testid="sidebar-item"
       data-nav={label.toLowerCase()}
-      className={({ isActive }) =>
-        `group relative flex items-center gap-3 h-10 rounded-md pl-3 pr-3 text-sm transition-colors ${
-          isActive ? "sidebar-item-active" : "sidebar-item-inactive"
-        }`
-      }
+      className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}
     >
-      {({ isActive }) => (
-        <>
-          {isActive && (
-            <span
-              aria-hidden
-              className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r"
-              style={{ backgroundColor: "var(--accent)" }}
-            />
-          )}
-          <Icon
-            size={18}
-            strokeWidth={1.75}
-            style={{
-              color: isActive ? "var(--accent)" : "var(--text-tertiary)",
-              flexShrink: 0,
-            }}
-          />
-          <span
-            className="truncate xl:inline hidden"
-            style={{
-              color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
-              fontWeight: isActive ? 500 : 400,
-            }}
-          >
-            {label}
-          </span>
-        </>
-      )}
+      <Icon size={18} strokeWidth={1.75} />
+      <span className="nav-label">{label}</span>
     </NavLink>
   );
 }

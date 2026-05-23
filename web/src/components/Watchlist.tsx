@@ -71,47 +71,21 @@ export function Watchlist({ activeTicker }: Props) {
   }
 
   return (
-    <aside
-      className="flex flex-col gap-3"
-      aria-label="Watchlist"
-      data-testid="watchlist"
-    >
-      <div className="flex items-center justify-between">
-        <h2
-          className="text-[11px] tracking-label uppercase"
-          style={{ color: "var(--text-secondary)", fontWeight: 500 }}
-        >
-          Watchlist
-        </h2>
+    <div aria-label="Watchlist" data-testid="watchlist">
+      <div className="wl-head">
+        <span className="title">Watchlist</span>
         {tickers.length > 0 && (
-          <span
-            className="text-[11px] font-mono"
-            style={{ color: "var(--text-tertiary)" }}
-          >
-            {tickers.length}
-          </span>
+          <span className="count">{tickers.length} / 50</span>
         )}
       </div>
 
-      {query.isPending && (
-        <div
-          className="text-xs"
-          style={{ color: "var(--text-tertiary)" }}
-        >
-          Loading watchlist…
-        </div>
-      )}
+      {query.isPending && <div className="wl-hint">Loading watchlist…</div>}
 
       {query.error && (
-        <div
-          className="text-xs"
-          style={{ color: "var(--negative)" }}
-        >
-          Failed to load watchlist
-        </div>
+        <div className="wl-error">Failed to load watchlist</div>
       )}
 
-      <div className="flex flex-col gap-2">
+      <div className="wl-list">
         {tickers.map((item) => (
           <WatchlistItem
             key={item.ticker}
@@ -124,14 +98,7 @@ export function Watchlist({ activeTicker }: Props) {
       </div>
 
       {!query.isPending && tickers.length === 0 && (
-        <div
-          className="text-xs px-3 py-4 rounded-md text-center"
-          style={{
-            color: "var(--text-tertiary)",
-            backgroundColor: "var(--bg-card)",
-            border: "1px dashed var(--border)",
-          }}
-        >
+        <div className="wl-add" style={{ cursor: "default" }}>
           No tickers yet
         </div>
       )}
@@ -146,12 +113,7 @@ export function Watchlist({ activeTicker }: Props) {
         <button
           type="button"
           onClick={() => setAddOpen(true)}
-          className="w-full text-left px-3 py-2 rounded-md text-xs transition-colors"
-          style={{
-            color: "var(--text-secondary)",
-            backgroundColor: "var(--bg-card)",
-            border: "1px dashed var(--border)",
-          }}
+          className="wl-add"
           data-testid="watchlist-add-open"
         >
           + Add to watchlist
@@ -159,20 +121,11 @@ export function Watchlist({ activeTicker }: Props) {
       )}
 
       {notice && (
-        <div
-          className="text-[11px] px-3 py-2 rounded-md"
-          role="status"
-          style={{
-            color: "var(--text-secondary)",
-            backgroundColor: "var(--bg-card-raised)",
-            border: "1px solid var(--border)",
-          }}
-          data-testid="watchlist-notice"
-        >
+        <div className="wl-notice" role="status" data-testid="watchlist-notice">
           {notice}
         </div>
       )}
-    </aside>
+    </div>
   );
 }
 
@@ -226,15 +179,8 @@ function AddPicker({ onPick, onCancel, disabled }: AddPickerProps) {
   }
 
   return (
-    <div
-      className="flex flex-col gap-1 rounded-md p-2"
-      style={{
-        backgroundColor: "var(--bg-card)",
-        border: "1px solid var(--border-strong)",
-      }}
-      data-testid="watchlist-add-picker"
-    >
-      <div className="flex items-center gap-2">
+    <div className="wl-picker" data-testid="watchlist-add-picker">
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <input
           ref={inputRef}
           type="text"
@@ -245,8 +191,7 @@ function AddPicker({ onPick, onCancel, disabled }: AddPickerProps) {
           }}
           onKeyDown={onKeyDown}
           placeholder="Add ticker…"
-          className="flex-1 bg-transparent outline-none text-sm placeholder:text-[color:var(--text-tertiary)]"
-          style={{ color: "var(--text-primary)" }}
+          className="wl-picker-input"
           disabled={disabled}
           data-testid="watchlist-add-input"
           autoComplete="off"
@@ -256,30 +201,19 @@ function AddPicker({ onPick, onCancel, disabled }: AddPickerProps) {
           type="button"
           onClick={onCancel}
           aria-label="Cancel add"
-          className="text-sm leading-none"
-          style={{ color: "var(--text-tertiary)" }}
+          className="wl-remove"
         >
           ✕
         </button>
       </div>
 
       {debounced && (
-        <div className="flex flex-col max-h-64 overflow-y-auto">
+        <div className="wl-picker-results">
           {searchQ.isFetching && results.length === 0 && (
-            <div
-              className="px-2 py-2 text-xs"
-              style={{ color: "var(--text-tertiary)" }}
-            >
-              Searching…
-            </div>
+            <div className="wl-hint">Searching…</div>
           )}
           {!searchQ.isFetching && results.length === 0 && (
-            <div
-              className="px-2 py-2 text-xs"
-              style={{ color: "var(--text-tertiary)" }}
-            >
-              No matches.
-            </div>
+            <div className="wl-hint">No matches.</div>
           )}
           {results.map((sec, i) => {
             const active = i === safeIdx;
@@ -290,27 +224,12 @@ function AddPicker({ onPick, onCancel, disabled }: AddPickerProps) {
                 onMouseEnter={() => setActiveIdx(i)}
                 onClick={() => onPick(sec.ticker)}
                 disabled={disabled}
-                className="w-full text-left px-2 py-1.5 rounded flex flex-col"
-                style={{
-                  backgroundColor: active
-                    ? "var(--bg-card-raised)"
-                    : "transparent",
-                }}
+                className={`wl-picker-result${active ? " active" : ""}`}
                 data-testid="watchlist-add-result"
                 data-ticker={sec.ticker}
               >
-                <span
-                  className="font-mono text-sm"
-                  style={{ color: "var(--accent)", fontWeight: 500 }}
-                >
-                  {sec.ticker}
-                </span>
-                <span
-                  className="text-[11px] truncate"
-                  style={{ color: "var(--text-secondary)" }}
-                >
-                  {sec.name}
-                </span>
+                <span className="tk">{sec.ticker}</span>
+                <span className="nm">{sec.name}</span>
               </button>
             );
           })}

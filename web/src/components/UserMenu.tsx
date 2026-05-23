@@ -17,49 +17,23 @@ export function UserMenu() {
   const display = user.name?.trim() || user.email.split("@")[0] || "User";
 
   return (
-    <div
-      className="flex flex-col gap-2 rounded-md p-2"
-      style={{
-        backgroundColor: "var(--bg-subtle)",
-        border: "1px solid var(--border)",
-      }}
-      data-testid="user-menu"
-    >
-      <div className="flex items-center gap-2 min-w-0">
+    <div data-testid="user-menu">
+      <div className="user-card">
         {user.avatarUrl ? (
           <img
             src={user.avatarUrl}
             alt=""
-            className="w-7 h-7 rounded-full shrink-0"
+            className="user-avatar"
             referrerPolicy="no-referrer"
           />
         ) : (
-          <span
-            className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-[10px] tracking-wider"
-            style={{
-              backgroundColor: "var(--bg-card-raised)",
-              border: "1px solid var(--border-strong)",
-              color: "var(--accent)",
-              fontWeight: 600,
-            }}
-            aria-hidden
-          >
+          <span className="user-avatar" aria-hidden>
             {initials(user.name ?? "", user.email)}
           </span>
         )}
-        <div className="hidden xl:flex flex-col min-w-0">
-          <span
-            className="text-xs truncate"
-            style={{ color: "var(--text-primary)", fontWeight: 500 }}
-          >
-            {display}
-          </span>
-          <span
-            className="text-[11px] truncate"
-            style={{ color: "var(--text-tertiary)" }}
-          >
-            {user.email}
-          </span>
+        <div className="user-info">
+          <div className="user-name">{display}</div>
+          <div className="user-email">{user.email}</div>
         </div>
       </div>
       <button
@@ -67,12 +41,11 @@ export function UserMenu() {
         onClick={() => {
           void signOut();
         }}
-        className="flex items-center gap-2 h-8 px-2 rounded-md text-xs transition-colors"
-        style={{ color: "var(--text-secondary)" }}
+        className="nav-item"
         aria-label="Sign out"
       >
-        <LogOut size={14} strokeWidth={1.75} />
-        <span className="hidden xl:inline">Sign out</span>
+        <LogOut size={18} strokeWidth={1.75} />
+        <span className="nav-label">Sign out</span>
       </button>
     </div>
   );

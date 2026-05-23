@@ -12,10 +12,11 @@ import {
 } from "lightweight-charts";
 import type { PriceBar, SmaPoint } from "../types";
 
-type Timeframe = "6M" | "1Y" | "3Y";
-const TIMEFRAMES: Timeframe[] = ["6M", "1Y", "3Y"];
+type Timeframe = "1M" | "6M" | "1Y" | "3Y";
+const TIMEFRAMES: Timeframe[] = ["1M", "6M", "1Y", "3Y"];
 
 function daysBack(tf: Timeframe): number {
+  if (tf === "1M") return 31;
   if (tf === "6M") return 183;
   if (tf === "1Y") return 365;
   return 365 * 3 + 5;
@@ -62,32 +63,35 @@ export function PriceChart({
   useEffect(() => {
     if (!containerRef.current) return;
 
+    // Monochrome dark theme — same widget, dark palette only.
     const chart = createChart(containerRef.current, {
       autoSize: true,
       layout: {
-        background: { color: "#18181a" },
-        textColor: "#9a968f",
+        background: { color: "rgba(0,0,0,0)" },
+        textColor: "rgba(255,255,255,0.45)",
         fontFamily:
-          '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
+          '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
       },
       grid: {
-        vertLines: { color: "#242428" },
-        horzLines: { color: "#242428" },
+        vertLines: { color: "rgba(255,255,255,0.05)" },
+        horzLines: { color: "rgba(255,255,255,0.05)" },
       },
-      rightPriceScale: { borderColor: "#2a2a2d" },
-      timeScale: { borderColor: "#2a2a2d", timeVisible: false },
+      rightPriceScale: { borderColor: "rgba(255,255,255,0.08)" },
+      timeScale: { borderColor: "rgba(255,255,255,0.08)", timeVisible: false },
       crosshair: { mode: 1 },
     });
 
     const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: "#7a9a7d",
-      downColor: "#a66b6b",
-      wickUpColor: "#7a9a7d",
-      wickDownColor: "#a66b6b",
-      borderVisible: false,
+      upColor: "rgba(255,255,255,0.92)",
+      downColor: "rgba(255,255,255,0.18)",
+      wickUpColor: "rgba(255,255,255,0.85)",
+      wickDownColor: "rgba(255,255,255,0.4)",
+      borderUpColor: "rgba(255,255,255,0.92)",
+      borderDownColor: "rgba(255,255,255,0.45)",
+      borderVisible: true,
     });
     const smaSeries = chart.addSeries(LineSeries, {
-      color: "#c9b896",
+      color: "rgba(255,255,255,0.55)",
       lineWidth: 2,
       priceLineVisible: false,
       lastValueVisible: true,
@@ -123,25 +127,10 @@ export function PriceChart({
   }, [candles, smaLine, timeframe]);
 
   return (
-    <section
-      className="rounded-2xl p-8 flex flex-col gap-6"
-      style={{
-        backgroundColor: "var(--bg-card)",
-        border: "1px solid var(--border)",
-      }}
-    >
-      <div className="flex items-center justify-between">
-        <h3
-          className="text-xs tracking-label uppercase"
-          style={{ color: "var(--text-secondary)", fontWeight: 500 }}
-        >
-          Price History
-        </h3>
-        <div
-          className="inline-flex items-center rounded-lg p-1"
-          style={{ backgroundColor: "var(--bg-subtle)" }}
-          role="tablist"
-        >
+    <div className="card chart-card">
+      <div className="card-head">
+        <span className="card-title">Price history · daily</span>
+        <div className="timeframes" role="tablist">
           {TIMEFRAMES.map((tf) => {
             const active = tf === timeframe;
             return (
@@ -151,14 +140,7 @@ export function PriceChart({
                 data-active={active}
                 type="button"
                 onClick={() => setTimeframe(tf)}
-                className="px-3 py-1 text-xs rounded-md transition-colors tracking-label uppercase"
-                style={{
-                  backgroundColor: active
-                    ? "var(--bg-card-raised)"
-                    : "transparent",
-                  color: active ? "var(--accent)" : "var(--text-tertiary)",
-                  fontWeight: 500,
-                }}
+                className={active ? "active" : ""}
               >
                 {tf}
               </button>
@@ -166,12 +148,13 @@ export function PriceChart({
           })}
         </div>
       </div>
-      <div
-        ref={containerRef}
-        data-testid="price-chart"
-        className="w-full"
-        style={{ height: 400 }}
-      />
-    </section>
+      <div className="chart-wrap">
+        <div
+          ref={containerRef}
+          data-testid="price-chart"
+          style={{ width: "100%", height: 360 }}
+        />
+      </div>
+    </div>
   );
 }
