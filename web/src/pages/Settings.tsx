@@ -1,8 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { LogOut } from "lucide-react";
-import { PageHeader } from "../components/PageHeader";
 import { useAuth } from "../contexts/AuthContext";
-import { fetchPreferences, savePreferences } from "../lib/api";
+import {
+  deleteAccount,
+  fetchPreferences,
+  savePreferences,
+  type UserPreferences,
+} from "../lib/api";
+import "./Settings.css";
 
 type ToastKind = "success" | "error";
 interface Toast {
@@ -10,138 +16,117 @@ interface Toast {
   kind: ToastKind;
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      className="text-[11px] tracking-label uppercase mb-3"
-      style={{ color: "var(--text-tertiary)", fontWeight: 600 }}
-    >
-      {children}
-    </div>
-  );
-}
-
-function Card({ children }: { children: React.ReactNode }) {
-  return (
-    <section
-      className="rounded-2xl p-6"
-      style={{
-        backgroundColor: "var(--bg-card)",
-        border: "1px solid var(--border)",
-      }}
-    >
-      {children}
-    </section>
-  );
-}
-
-function Toggle({
-  on,
-  onChange,
-  disabled,
-  ariaLabel,
-}: {
-  on: boolean;
-  onChange: (next: boolean) => void;
-  disabled?: boolean;
-  ariaLabel: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      aria-label={ariaLabel}
-      disabled={disabled}
-      onClick={() => onChange(!on)}
-      className="relative inline-flex shrink-0 transition-colors"
-      style={{
-        width: "40px",
-        height: "22px",
-        borderRadius: "999px",
-        backgroundColor: on
-          ? "color-mix(in srgb, var(--accent) 70%, transparent)"
-          : "var(--bg-card-raised)",
-        border: `1px solid ${on ? "var(--accent-dim)" : "var(--border-strong)"}`,
-        cursor: disabled ? "wait" : "pointer",
-        opacity: disabled ? 0.6 : 1,
-      }}
-    >
-      <span
-        style={{
-          position: "absolute",
-          top: "2px",
-          left: on ? "20px" : "2px",
-          width: "16px",
-          height: "16px",
-          borderRadius: "999px",
-          backgroundColor: on ? "var(--bg-page)" : "var(--text-secondary)",
-          transition: "left 120ms ease, background-color 120ms ease",
-        }}
-      />
-    </button>
-  );
-}
-
-const NEWSLETTER_CACHE_KEY = "newsletter_enabled_cache_v1";
-
-function readCachedEnabled(): boolean | null {
+/** Short zone name, e.g. "EDT", "PST", "GMT+9". */
+function zoneAbbrev(tz: string): string {
   try {
-    const v = sessionStorage.getItem(NEWSLETTER_CACHE_KEY);
-    if (v === "true") return true;
-    if (v === "false") return false;
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      timeZoneName: "short",
+    }).formatToParts(new Date());
+    return parts.find((p) => p.type === "timeZoneName")?.value ?? "";
   } catch {
-    // sessionStorage may be unavailable
-  }
-  return null;
-}
-
-function writeCachedEnabled(value: boolean): void {
-  try {
-    sessionStorage.setItem(NEWSLETTER_CACHE_KEY, String(value));
-  } catch {
-    // ignore
+    return "";
   }
 }
 
-function NewsletterToggle({
-  setToast,
-}: {
-  setToast: (t: Toast | null) => void;
-}) {
-  const [enabled, setEnabled] = useState<boolean | null>(() =>
-    readCachedEnabled(),
-  );
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+/** Human label, e.g. "America / New_York · EDT". */
+function zoneLabel(tz: string): string {
+  const pretty = tz.replace("/", " / ");
+  const abbr = zoneAbbrev(tz);
+  return abbr ? `${pretty} · ${abbr}` : pretty;
+}
+
+const FALLBACK_ZONES = [
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "America/Anchorage",
+  "Pacific/Honolulu",
+  "America/Toronto",
+  "America/Sao_Paulo",
+  "Europe/London",
+  "Europe/Paris",
+  "Europe/Berlin",
+  "Europe/Moscow",
+  "Asia/Dubai",
+  "Asia/Kolkata",
+  "Asia/Shanghai",
+  "Asia/Tokyo",
+  "Asia/Singapore",
+  "Australia/Sydney",
+  "UTC",
+];
+
+function supportedZones(): string[] {
+  const intl = Intl as typeof Intl & {
+    supportedValuesOf?: (key: string) => string[];
+  };
+  try {
+    const all = intl.supportedValuesOf?.("timeZone");
+    if (all && all.length) return all;
+  } catch {
+    // fall through
+  }
+  return FALLBACK_ZONES;
+}
+
+export default function Settings() {
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const [prefs, setPrefs] = useState<UserPreferences | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
+
+  const [savingNewsletter, setSavingNewsletter] = useState(false);
+  const [savingTz, setSavingTz] = useState(false);
+  const [editingTz, setEditingTz] = useState(false);
+
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const currentTz = prefs?.time_zone;
+  const zones = useMemo(() => {
+    const list = supportedZones();
+    if (currentTz && !list.includes(currentTz)) {
+      return [currentTz, ...list];
+    }
+    return list;
+  }, [currentTz]);
 
   useEffect(() => {
     let active = true;
     fetchPreferences()
       .then((p) => {
-        if (!active) return;
-        setEnabled(p.newsletter_enabled);
-        writeCachedEnabled(p.newsletter_enabled);
+        if (active) setPrefs(p);
       })
       .catch((err) => {
-        if (!active) return;
-        setError(err instanceof Error ? err.message : "failed to load");
+        if (active)
+          setLoadError(err instanceof Error ? err.message : "Failed to load");
       });
     return () => {
       active = false;
     };
   }, []);
 
-  const onChange = async (next: boolean) => {
-    if (saving) return;
-    const prev = enabled;
-    setEnabled(next);
-    writeCachedEnabled(next);
-    setSaving(true);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2600);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const newsletterOn = prefs?.newsletter_enabled ?? false;
+
+  async function toggleNewsletter() {
+    if (!prefs || savingNewsletter) return;
+    const next = !prefs.newsletter_enabled;
+    const prev = prefs;
+    setPrefs({ ...prefs, newsletter_enabled: next });
+    setSavingNewsletter(true);
     try {
       const result = await savePreferences({ newsletter_enabled: next });
-      setEnabled(result.newsletter_enabled);
-      writeCachedEnabled(result.newsletter_enabled);
+      setPrefs(result);
       setToast({
         message: result.newsletter_enabled
           ? "Daily emails enabled"
@@ -149,145 +134,241 @@ function NewsletterToggle({
         kind: "success",
       });
     } catch (err) {
-      setEnabled(prev);
-      if (prev !== null) writeCachedEnabled(prev);
+      setPrefs(prev);
       setToast({
         message: err instanceof Error ? err.message : "Failed to save",
         kind: "error",
       });
     } finally {
-      setSaving(false);
+      setSavingNewsletter(false);
     }
-  };
+  }
+
+  async function changeTimeZone(tz: string) {
+    if (!prefs || tz === prefs.time_zone) {
+      setEditingTz(false);
+      return;
+    }
+    const prev = prefs;
+    setPrefs({ ...prefs, time_zone: tz });
+    setEditingTz(false);
+    setSavingTz(true);
+    try {
+      const result = await savePreferences({ time_zone: tz });
+      setPrefs(result);
+      setToast({ message: `Time zone set to ${tz}`, kind: "success" });
+    } catch (err) {
+      setPrefs(prev);
+      setToast({
+        message: err instanceof Error ? err.message : "Failed to save",
+        kind: "error",
+      });
+    } finally {
+      setSavingTz(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      await deleteAccount();
+      await signOut();
+      navigate("/", { replace: true });
+    } catch (err) {
+      setConfirmDelete(false);
+      setDeleting(false);
+      setToast({
+        message: err instanceof Error ? err.message : "Failed to delete account",
+        kind: "error",
+      });
+    }
+  }
 
   return (
-    <div className="flex items-start justify-between gap-6">
-      <div className="min-w-0">
-        <div
-          className="text-sm"
-          style={{ color: "var(--text-primary)", fontWeight: 500 }}
-        >
-          Daily watchlist email
-        </div>
-        <p
-          className="text-xs mt-1"
-          style={{ color: "var(--text-secondary)", lineHeight: 1.55 }}
-        >
-          Get a digest of your watchlist scores every day at 8&nbsp;PM&nbsp;ET.
-        </p>
-        {error && (
-          <p
-            className="text-xs mt-2"
-            style={{ color: "var(--negative)" }}
-          >
-            {error}
-          </p>
-        )}
-      </div>
-      {enabled === null ? (
-        <div
-          aria-hidden
-          style={{
-            width: "40px",
-            height: "22px",
-            borderRadius: "999px",
-            backgroundColor: "var(--bg-card-raised)",
-            border: "1px solid var(--border-strong)",
-            opacity: 0.5,
-          }}
-        />
-      ) : (
-        <Toggle
-          on={enabled}
-          disabled={saving}
-          onChange={onChange}
-          ariaLabel="Toggle daily watchlist email"
-        />
-      )}
-    </div>
-  );
-}
+    <div className="sbg">
+      <div className="bg-grid" />
 
-function ToastBanner({ toast }: { toast: Toast }) {
-  return (
-    <div
-      className="fixed bottom-6 right-6 px-4 py-3 rounded-lg text-xs"
-      style={{
-        backgroundColor: "var(--bg-card-raised)",
-        border: `1px solid ${
-          toast.kind === "error" ? "var(--negative)" : "var(--border-strong)"
-        }`,
-        color: "var(--text-primary)",
-        boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-        zIndex: 60,
-      }}
-      role="status"
-    >
-      {toast.message}
-    </div>
-  );
-}
+      <main className="main">
+        <header className="page-head">
+          <h1 className="page-title">Settings</h1>
+          <p className="page-sub">Manage your account and notifications.</p>
+        </header>
 
-export default function Settings() {
-  const { user, signOut } = useAuth();
-  const [toast, setToast] = useState<Toast | null>(null);
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 2400);
-    return () => clearTimeout(t);
-  }, [toast]);
-
-  return (
-    <div className="max-w-2xl mx-auto px-6 py-6">
-      <PageHeader
-        title="Settings"
-        description="Manage your account and notifications."
-      />
-
-      <div className="flex flex-col gap-4 mt-2">
-        <Card>
-          <SectionLabel>Notifications</SectionLabel>
-          <NewsletterToggle setToast={setToast} />
-        </Card>
-
-        <Card>
-          <SectionLabel>Account</SectionLabel>
-          <div className="flex items-center justify-between gap-6">
-            <div className="min-w-0">
-              <div
-                className="text-[11px] tracking-label uppercase"
-                style={{ color: "var(--text-tertiary)" }}
-              >
-                Email
+        {/* Notifications */}
+        <section className="card">
+          <div className="card-head">
+            <span className="card-title">Notifications</span>
+          </div>
+          <div className="row">
+            <div className="row-body">
+              <div className="row-label">Daily watchlist email</div>
+              <div className="row-desc">
+                Get a digest of your watchlist scores every day at 8&nbsp;PM&nbsp;ET.
               </div>
-              <div
-                className="text-sm mt-1 font-mono truncate"
-                style={{ color: "var(--text-primary)" }}
-              >
-                {user?.email ?? "—"}
+              {loadError && <div className="row-error">{loadError}</div>}
+            </div>
+            <div className="row-control">
+              {prefs === null ? (
+                <span className="toggle skeleton" aria-hidden />
+              ) : (
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={newsletterOn}
+                  aria-label="Toggle daily watchlist email"
+                  disabled={savingNewsletter}
+                  className={`toggle${newsletterOn ? " on" : ""}`}
+                  onClick={() => void toggleNewsletter()}
+                />
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* Account */}
+        <section className="card">
+          <div className="card-head">
+            <span className="card-title">Account</span>
+          </div>
+
+          <div className="row">
+            <div className="row-body">
+              <div className="field-static">
+                <span className="lbl">Email</span>
+                <span className="val">{user?.email ?? "—"}</span>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                void signOut();
-              }}
-              className="flex items-center gap-2 h-9 px-3 rounded-md text-xs transition-colors"
-              style={{
-                color: "var(--text-secondary)",
-                border: "1px solid var(--border-strong)",
-                backgroundColor: "var(--bg-card-raised)",
-              }}
-            >
-              <LogOut size={14} strokeWidth={1.75} />
-              Sign out
-            </button>
+            <div className="row-control">
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => void signOut()}
+              >
+                <LogOut strokeWidth={1.8} />
+                Sign out
+              </button>
+            </div>
           </div>
-        </Card>
-      </div>
 
-      {toast && <ToastBanner toast={toast} />}
+          <div className="row">
+            <div className="row-body">
+              <div className="field-static">
+                <span className="lbl">Time zone</span>
+                <span className="val">
+                  {prefs ? zoneLabel(prefs.time_zone) : "—"}
+                </span>
+              </div>
+            </div>
+            <div className="row-control">
+              {editingTz && prefs ? (
+                <div className="tz-edit">
+                  <select
+                    className="tz-select"
+                    autoFocus
+                    value={prefs.time_zone}
+                    disabled={savingTz}
+                    onChange={(e) => void changeTimeZone(e.target.value)}
+                  >
+                    {zones.map((tz) => (
+                      <option key={tz} value={tz}>
+                        {zoneLabel(tz)}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="tz-cancel"
+                    onClick={() => setEditingTz(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  disabled={!prefs || savingTz}
+                  onClick={() => setEditingTz(true)}
+                >
+                  CHANGE
+                </button>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* Danger zone */}
+        <section className="card danger-card">
+          <div className="card-head">
+            <span className="card-title">Danger zone</span>
+          </div>
+          <div className="row">
+            <div className="row-body">
+              <div className="row-label">Delete account</div>
+              <div className="row-desc">
+                Permanently remove your account, watchlists, and alert rules.
+                This cannot be undone.
+              </div>
+            </div>
+            <div className="row-control">
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={() => setConfirmDelete(true)}
+              >
+                DELETE ACCOUNT
+              </button>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      {confirmDelete && (
+        <div
+          className="modal-scrim"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirm account deletion"
+          onClick={() => !deleting && setConfirmDelete(false)}
+        >
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2 className="modal-title">Delete your account?</h2>
+            <p className="modal-text">
+              This permanently removes <strong>{user?.email ?? "your account"}</strong>{" "}
+              along with your watchlists, combos, and alert rules. This action
+              cannot be undone.
+            </p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-outline"
+                disabled={deleting}
+                onClick={() => setConfirmDelete(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                disabled={deleting}
+                onClick={() => void handleDelete()}
+              >
+                {deleting ? "DELETING…" : "DELETE ACCOUNT"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast && (
+        <div
+          className={`toast${toast.kind === "error" ? " error" : ""}`}
+          role="status"
+        >
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 }
