@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { Combo, IndicatorMeta } from "../types";
+import "./Modal.css";
 
 interface Props {
   meta: IndicatorMeta;
@@ -19,7 +20,6 @@ export function IndicatorDetailModal({
   onCreateCombo,
 }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -36,37 +36,17 @@ export function IndicatorDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-center justify-center px-4"
-      style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
+      className="mbg"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
       data-testid="indicator-detail-modal"
     >
-      <div
-        ref={containerRef}
-        className="w-full max-w-md rounded-2xl flex flex-col"
-        style={{
-          backgroundColor: "var(--bg-card)",
-          border: "1px solid var(--border-strong)",
-          maxHeight: "85vh",
-        }}
-      >
-        <div
-          className="px-5 py-4 flex items-start justify-between gap-3"
-          style={{ borderBottom: "1px solid var(--border)" }}
-        >
+      <div className="modal modal-sm">
+        <div className="modal-head">
           <div className="min-w-0">
-            <div
-              className="text-base"
-              style={{ color: "var(--text-primary)", fontWeight: 600 }}
-            >
-              {meta.label}
-            </div>
-            <div
-              className="text-[11px] mt-0.5 font-mono tracking-label uppercase"
-              style={{ color: "var(--text-tertiary)" }}
-            >
+            <div className="modal-title">{meta.label}</div>
+            <div className="modal-sub">
               {meta.abbreviation} · {meta.category}
             </div>
           </div>
@@ -74,27 +54,16 @@ export function IndicatorDetailModal({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="text-lg leading-none"
-            style={{ color: "var(--text-tertiary)" }}
+            className="modal-close"
           >
             ×
           </button>
         </div>
 
-        <div className="px-5 py-4 overflow-y-auto flex-1 flex flex-col gap-4">
+        <div className="modal-body">
           <section>
-            <h4
-              className="text-[10px] tracking-label uppercase mb-2"
-              style={{ color: "var(--text-tertiary)" }}
-            >
-              About
-            </h4>
-            <p
-              className="text-sm leading-relaxed"
-              style={{ color: "var(--text-secondary)" }}
-            >
-              {meta.description}
-            </p>
+            <h4 className="sec-label">About</h4>
+            <p className="about-text">{meta.description}</p>
           </section>
         </div>
 
@@ -109,30 +78,12 @@ export function IndicatorDetailModal({
             }}
           />
         ) : (
-          <div
-            className="px-5 py-4 flex items-center justify-end gap-2"
-            style={{ borderTop: "1px solid var(--border)" }}
-          >
+          <div className="modal-foot">
             <button
               type="button"
               onClick={() => setPickerOpen(true)}
               disabled={eligibleCombos.length === 0}
-              className="px-3 py-2 rounded-md text-sm transition-colors"
-              style={{
-                backgroundColor: "transparent",
-                color:
-                  eligibleCombos.length === 0
-                    ? "var(--text-tertiary)"
-                    : "var(--accent)",
-                border: `1px solid ${
-                  eligibleCombos.length === 0
-                    ? "var(--border)"
-                    : "var(--border-strong)"
-                }`,
-                fontWeight: 500,
-                cursor:
-                  eligibleCombos.length === 0 ? "not-allowed" : "pointer",
-              }}
+              className="btn btn-outline"
               title={
                 eligibleCombos.length === 0
                   ? "Already in every combo"
@@ -140,25 +91,17 @@ export function IndicatorDetailModal({
               }
               data-testid="indicator-add-to-combo"
             >
-              Add to Combo
+              ADD TO COMBO
             </button>
             <button
               type="button"
               onClick={onCreateCombo}
               disabled={atLimit}
-              className="px-3 py-2 rounded-md text-sm"
-              style={{
-                backgroundColor: atLimit
-                  ? "var(--bg-card-raised)"
-                  : "var(--accent)",
-                color: atLimit ? "var(--text-tertiary)" : "var(--bg-page)",
-                fontWeight: 500,
-                cursor: atLimit ? "not-allowed" : "pointer",
-              }}
+              className="btn btn-primary"
               title={atLimit ? `Combo limit reached (${maxCombos})` : undefined}
               data-testid="indicator-create-combo"
             >
-              + Create Combo
+              + CREATE COMBO
             </button>
           </div>
         )}
@@ -179,62 +122,41 @@ function ComboPicker({
   onPick: (comboId: string) => void;
 }) {
   return (
-    <div
-      className="px-5 py-4 flex flex-col gap-2"
-      style={{ borderTop: "1px solid var(--border)" }}
-      data-testid="combo-picker"
-    >
-      <div className="flex items-center justify-between">
-        <h4
-          className="text-[10px] tracking-label uppercase"
-          style={{ color: "var(--text-tertiary)" }}
-        >
-          Pick a combo
-        </h4>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="text-xs"
-          style={{ color: "var(--text-tertiary)" }}
-        >
-          Cancel
-        </button>
-      </div>
-      {combos.length === 0 && (
-        <div
-          className="text-xs italic py-2"
-          style={{ color: "var(--text-tertiary)" }}
-        >
-          No combos yet. Create one first.
-        </div>
-      )}
-      {combos.map((c) => {
-        const has = c.indicatorIds.includes(indicatorId);
-        return (
-          <button
-            key={c.id}
-            type="button"
-            onClick={() => !has && onPick(c.id)}
-            disabled={has}
-            className="w-full text-left px-3 py-2 rounded-md flex items-center justify-between"
-            style={{
-              backgroundColor: "var(--bg-card-raised)",
-              border: "1px solid var(--border)",
-              color: has ? "var(--text-tertiary)" : "var(--text-primary)",
-              cursor: has ? "not-allowed" : "pointer",
-            }}
-            data-testid="combo-picker-item"
-          >
-            <span className="text-sm">{c.name}</span>
-            <span
-              className="text-[10px] tracking-label uppercase font-mono"
-              style={{ color: has ? "var(--positive)" : "var(--text-tertiary)" }}
-            >
-              {has ? "✓ in combo" : `${c.indicatorIds.length} ind.`}
-            </span>
+    <div className="modal-foot" data-testid="combo-picker">
+      <div style={{ width: "100%" }}>
+        <div className="sec-head">
+          <h4 className="sec-label">Pick a combo</h4>
+          <button type="button" onClick={onCancel} className="link-btn">
+            Cancel
           </button>
-        );
-      })}
+        </div>
+        {combos.length === 0 ? (
+          <div className="empty">No combos yet. Create one first.</div>
+        ) : (
+          <div className="rows">
+            {combos.map((c) => {
+              const has = c.indicatorIds.includes(indicatorId);
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => !has && onPick(c.id)}
+                  disabled={has}
+                  className="pick-row"
+                  data-testid="combo-picker-item"
+                >
+                  <span className="pr-main">
+                    <span className="pr-name">{c.name}</span>
+                  </span>
+                  <span className={`pr-tag${has ? " in" : ""}`}>
+                    {has ? "✓ IN COMBO" : `${c.indicatorIds.length} IND`}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
