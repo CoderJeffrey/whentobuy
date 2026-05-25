@@ -129,7 +129,7 @@ export default function Login() {
       </div>
 
       <div className="legal">
-        © 2026 indicatorhub.io · not investment advice · v3.2.1
+        © 2026 indicatorhub.dev · not investment advice · v3.2.1
       </div>
     </div>
   );

@@ -233,7 +233,7 @@ export default function Landing() {
                 <span className="dot r" />
                 <span className="dot y" />
                 <span className="dot g" />
-                <span className="from">digest@indicatorhub.io</span>
+                <span className="from">digest@indicatorhub.dev</span>
               </div>
               <div className="email-subj">
                 <span className="label">subject:</span> 4 tickers matched your conditions — Tue, May 19
@@ -618,7 +618,7 @@ export default function Landing() {
 
               <div className="digest-foot">
                 <span>digest #186 · alert v3</span>
-                <span>indicatorhub.io/d/0186</span>
+                <span>indicatorhub.dev/d/0186</span>
               </div>
             </div>
           </div>
@@ -738,7 +738,7 @@ export default function Landing() {
             </div>
           </div>
           <div className="footer-base">
-            <span>© 2026 indicatorhub.io · not investment advice</span>
+            <span>© 2026 indicatorhub.dev · not investment advice</span>
             <span>v3.2.1 · status: operational</span>
           </div>
         </div>
