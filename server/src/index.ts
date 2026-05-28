@@ -156,7 +156,7 @@ async function buildDashboard(
     .filter((p): p is SmaPoint => p != null);
 
   const combos = await listCombos(userId);
-  const comboStatuses = evaluateCombos(combos, ctx);
+  const comboStatuses = await evaluateCombos(combos, ctx);
   const anyGreen = comboStatuses.some((c) => c.green);
 
   return {
@@ -221,7 +221,7 @@ async function getWatchlistDisplayItem(
     : 0;
 
   const ctx = buildEvalContext(prices);
-  const statuses = evaluateCombos(combosForUser, ctx);
+  const statuses = await evaluateCombos(combosForUser, ctx);
   const greenComboCount = statuses.filter((s) => s.green).length;
 
   return {

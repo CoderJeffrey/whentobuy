@@ -10,6 +10,13 @@ export interface IndicatorMeta {
   description: string;
 }
 
+export interface MarketData {
+  date: string;
+  vix: number | null;
+  fngValue: number | null;
+  fngRating: string | null;
+}
+
 export interface PriceBar {
   date: string;
   open: number;
