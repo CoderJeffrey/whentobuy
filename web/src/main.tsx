@@ -28,7 +28,7 @@ createRoot(document.getElementById("root")!).render(
       persistOptions={{
         persister,
         maxAge: 24 * 60 * 60 * 1000,
-        buster: "v3-marketplace-83",
+        buster: "v4-marketplace-89",
       }}
     >
       <App />
