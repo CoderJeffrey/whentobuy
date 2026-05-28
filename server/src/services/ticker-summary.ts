@@ -81,7 +81,7 @@ export async function getTickerSummary(
 
   const ctx = buildEvalContext(prices);
   const combos = await listCombos(userId);
-  const statuses = evaluateCombos(combos, ctx);
+  const statuses = await evaluateCombos(combos, ctx);
   const greenComboCount = statuses.filter((s) => s.green).length;
 
   return {

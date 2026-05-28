@@ -1,6 +1,7 @@
 import type { EvalContext } from "../eval-context.js";
 import { INDICATOR_REGISTRY, isIndicatorId } from "../indicator-registry.js";
 import { getSupabaseAdmin } from "../supabase.js";
+import { getTodayMarketData } from "./market-data.js";
 import type { Combo, ComboStatus, IndicatorId } from "../types.js";
 
 export const MAX_COMBOS_PER_USER = 5;
@@ -376,11 +377,15 @@ export async function ensureUserHasCombo(userId: string): Promise<void> {
 /**
  * Evaluate every combo for the given EvalContext. A combo is green iff every
  * indicator inside it triggers. Empty combos are treated as not-green.
+ *
+ * Market-wide indicators read today's `market_data` (fetched once, then cached
+ * for the rest of the day); per-stock indicators ignore it.
  */
-export function evaluateCombos(
+export async function evaluateCombos(
   combos: Combo[],
   ctx: EvalContext,
-): ComboStatus[] {
+): Promise<ComboStatus[]> {
+  const marketData = await getTodayMarketData();
   return combos.map((combo) => {
     const indicators = combo.indicatorIds.map((id) => {
       const def = INDICATOR_REGISTRY[id];
@@ -393,7 +398,7 @@ export function evaluateCombos(
           displayValue: "unknown",
         };
       }
-      const { triggered, displayValue } = def.evaluate(ctx);
+      const { triggered, displayValue } = def.evaluate(ctx, marketData);
       return {
         indicatorId: id,
         label: def.label,

@@ -83,6 +83,16 @@ async function migrate(conn: DuckDBConnection): Promise<void> {
     );
   `);
 
+  await conn.run(`
+    CREATE TABLE IF NOT EXISTS market_data (
+      date       DATE PRIMARY KEY,
+      vix        DOUBLE,
+      fng_value  INTEGER,
+      fng_rating VARCHAR,
+      fetched_at TIMESTAMP NOT NULL DEFAULT now()
+    );
+  `);
+
   await conn.run(
     "CREATE INDEX IF NOT EXISTS idx_prices_ticker ON prices(ticker)",
   );

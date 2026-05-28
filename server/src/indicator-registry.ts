@@ -3,6 +3,7 @@ import type {
   IndicatorCategory,
   IndicatorId,
   IndicatorMeta,
+  MarketData,
 } from "./types.js";
 
 export interface IndicatorEvaluation {
@@ -11,7 +12,11 @@ export interface IndicatorEvaluation {
 }
 
 export interface IndicatorDef extends IndicatorMeta {
-  evaluate: (ctx: EvalContext) => IndicatorEvaluation;
+  // Market-wide indicators read `marketData`; per-stock indicators ignore it.
+  evaluate: (
+    ctx: EvalContext,
+    marketData?: MarketData | null,
+  ) => IndicatorEvaluation;
 }
 
 function fmt(n: number | null | undefined, digits = 2): string {
@@ -1223,6 +1228,78 @@ const REGISTRY: IndicatorDef[] = [
       };
     },
   },
+
+  // ──────────────── Market (market-wide) ────────────────
+  {
+    id: "vix_calm",
+    label: "VIX Below 20",
+    abbreviation: "VIX<20",
+    category: "market",
+    description:
+      "The VIX volatility index is below 20, signaling a calm, low-fear market environment.",
+    evaluate: (_ctx, md) => ({
+      triggered: md?.vix != null && md.vix < 20,
+      displayValue: md?.vix != null ? `VIX: ${md.vix.toFixed(1)}` : "VIX: —",
+    }),
+  },
+  {
+    id: "vix_fear",
+    label: "VIX Above 30",
+    abbreviation: "VIX>30",
+    category: "market",
+    description:
+      "The VIX volatility index is above 30, signaling elevated fear and volatility.",
+    evaluate: (_ctx, md) => ({
+      triggered: md?.vix != null && md.vix > 30,
+      displayValue: md?.vix != null ? `VIX: ${md.vix.toFixed(1)}` : "VIX: —",
+    }),
+  },
+  {
+    id: "fng_extreme_fear",
+    label: "Extreme Fear",
+    abbreviation: "FNG<25",
+    category: "market",
+    description:
+      "CNN Fear & Greed index below 25 — the market is in extreme fear.",
+    evaluate: (_ctx, md) => ({
+      triggered: md?.fngValue != null && md.fngValue < 25,
+      displayValue: md?.fngValue != null ? `F&G: ${md.fngValue}` : "F&G: —",
+    }),
+  },
+  {
+    id: "fng_fear",
+    label: "Fear",
+    abbreviation: "FNG<45",
+    category: "market",
+    description: "CNN Fear & Greed index below 45 — the market is fearful.",
+    evaluate: (_ctx, md) => ({
+      triggered: md?.fngValue != null && md.fngValue < 45,
+      displayValue: md?.fngValue != null ? `F&G: ${md.fngValue}` : "F&G: —",
+    }),
+  },
+  {
+    id: "fng_greed",
+    label: "Greed",
+    abbreviation: "FNG>55",
+    category: "market",
+    description: "CNN Fear & Greed index above 55 — the market is greedy.",
+    evaluate: (_ctx, md) => ({
+      triggered: md?.fngValue != null && md.fngValue > 55,
+      displayValue: md?.fngValue != null ? `F&G: ${md.fngValue}` : "F&G: —",
+    }),
+  },
+  {
+    id: "fng_extreme_greed",
+    label: "Extreme Greed",
+    abbreviation: "FNG>75",
+    category: "market",
+    description:
+      "CNN Fear & Greed index above 75 — the market is in extreme greed.",
+    evaluate: (_ctx, md) => ({
+      triggered: md?.fngValue != null && md.fngValue > 75,
+      displayValue: md?.fngValue != null ? `F&G: ${md.fngValue}` : "F&G: —",
+    }),
+  },
 ];
 
 export const INDICATOR_REGISTRY: Record<string, IndicatorDef> = Object.freeze(
@@ -1252,4 +1329,5 @@ export const CATEGORIES: IndicatorCategory[] = [
   "volume",
   "pattern",
   "mean_reversion",
+  "market",
 ];
