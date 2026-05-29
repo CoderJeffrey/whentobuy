@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, Navigate, useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { fetchDashboard } from "../lib/api";
 import { PriceChart } from "../components/PriceChart";
 import { SearchBar } from "../components/SearchBar";
@@ -32,6 +33,7 @@ function formatVolume(v: number | undefined): string {
 }
 
 export default function Dashboard() {
+  const { t } = useTranslation();
   const { symbol: symbolParam } = useParams<{ symbol: string }>();
   const raw = symbolParam ?? "AAPL.US";
   const parsed = parseSymbol(raw);
@@ -61,29 +63,29 @@ export default function Dashboard() {
             <SearchBar />
             <div className="topbar-meta" data-testid="last-updated">
               <span className="pulse" />
-              <span>Last updated · {formatLastUpdated(data?.asOf)}</span>
+              <span>{t("dashboard.lastUpdated", { date: formatLastUpdated(data?.asOf) })}</span>
             </div>
           </div>
 
           {isPending && (
             <div className="card state-card">
-              Loading <span className="state-tk">{ticker}</span>…
+              {t("dashboard.loadingTicker", { ticker })}
             </div>
           )}
 
           {!isPending && error && (
             <div className="card state-card">
               <div>
-                Couldn’t load <span className="state-tk">{ticker}</span>.
+                {t("dashboard.couldntLoad", { ticker })}
                 <br />
-                {error instanceof Error ? error.message : "Something went wrong."}
+                {error instanceof Error ? error.message : t("common.somethingWentWrong")}
               </div>
               <button
                 type="button"
                 className="state-retry"
                 onClick={() => refetch()}
               >
-                Retry →
+                {t("dashboard.retry")}
               </button>
             </div>
           )}
@@ -109,6 +111,7 @@ export default function Dashboard() {
 }
 
 function TickerHero({ data }: { data: DashboardResponse }) {
+  const { t } = useTranslation();
   const positive = data.priceChange >= 0;
   const sign = data.priceChangePct >= 0 ? "+" : "";
   const last = data.priceHistory[data.priceHistory.length - 1];
@@ -138,23 +141,23 @@ function TickerHero({ data }: { data: DashboardResponse }) {
       </div>
       <div className="ticker-meta">
         <div className="meta-cell">
-          <div className="label">Open</div>
+          <div className="label">{t("dashboard.open")}</div>
           <div className="value">
             {last ? formatPrice(last.open, currency) : "—"}
           </div>
         </div>
         <div className="meta-cell">
-          <div className="label">Day range</div>
+          <div className="label">{t("dashboard.dayRange")}</div>
           <div className="value">
             {last ? `${last.low.toFixed(2)} – ${last.high.toFixed(2)}` : "—"}
           </div>
         </div>
         <div className="meta-cell">
-          <div className="label">Volume</div>
+          <div className="label">{t("dashboard.volume")}</div>
           <div className="value">{formatVolume(last?.volume)}</div>
         </div>
         <div className="meta-cell">
-          <div className="label">Prev close</div>
+          <div className="label">{t("dashboard.prevClose")}</div>
           <div className="value">
             {prev ? formatPrice(prev.close, currency) : "—"}
           </div>
@@ -165,19 +168,20 @@ function TickerHero({ data }: { data: DashboardResponse }) {
 }
 
 function CombosSection({ combos }: { combos: ComboStatus[] }) {
+  const { t } = useTranslation();
   return (
     <div className="card combos-card" data-testid="combos-section">
       <div className="card-head">
-        <span className="card-title">Your combos</span>
+        <span className="card-title">{t("combos.yourCombos")}</span>
         <Link to="/indicators" className="card-action">
-          MANAGE →
+          {t("combos.manage")}
         </Link>
       </div>
 
       {combos.length === 0 ? (
         <div className="combos-empty" data-testid="combos-empty">
-          No combos yet.{" "}
-          <Link to="/indicators">Create one in the Indicators tab →</Link>
+          {t("combos.emptyDashboard")}{" "}
+          <Link to="/indicators">{t("combos.createInIndicators")}</Link>
         </div>
       ) : (
         combos.map((combo) => <ComboRow key={combo.comboId} combo={combo} />)
@@ -187,6 +191,7 @@ function CombosSection({ combos }: { combos: ComboStatus[] }) {
 }
 
 function ComboRow({ combo }: { combo: ComboStatus }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const triggeredCount = combo.indicators.filter((i) => i.triggered).length;
   const totalCount = combo.indicators.length;
@@ -209,19 +214,22 @@ function ComboRow({ combo }: { combo: ComboStatus }) {
         <div className="combo-body">
           <div className="combo-name">{combo.name}</div>
           <div className="combo-detail">
-            {triggeredCount} / {totalCount} conditions triggered
+            {t("combos.conditionsTriggered", {
+              triggered: triggeredCount,
+              total: totalCount,
+            })}
             {conditions ? ` · ${conditions}` : ""}
           </div>
         </div>
         <span className="combo-flag">
-          {combo.green ? "TRIGGERED →" : "NOT TRIGGERED →"}
+          {combo.green ? t("combos.triggered") : t("combos.notTriggered")}
         </span>
       </button>
 
       {expanded && (
         <div className="combo-detail-list" data-testid="combo-detail">
           {combo.indicators.length === 0 && (
-            <div className="wl-hint">No indicators in this combo.</div>
+            <div className="wl-hint">{t("combos.empty")}</div>
           )}
           {combo.indicators.map((ind) => (
             <div

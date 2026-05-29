@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Trans, useTranslation } from "react-i18next";
 import {
   addIndicatorToCombo,
   createCombo,
@@ -25,6 +26,7 @@ type EditorState =
   | { kind: "edit"; combo: Combo };
 
 export default function Indicators() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
 
   const marketplaceQ = useQuery({
@@ -72,12 +74,12 @@ export default function Indicators() {
       createCombo(input),
     onSuccess: () => {
       invalidateDownstream();
-      flash("Combo created");
+      flash(t("combos.created"));
       setEditorState({ kind: "closed" });
       setEditorError(null);
     },
     onError: (err) => {
-      setEditorError(err instanceof Error ? err.message : "Failed to save");
+      setEditorError(err instanceof Error ? err.message : t("common.failedToSave"));
     },
   });
 
@@ -93,12 +95,12 @@ export default function Indicators() {
       }),
     onSuccess: () => {
       invalidateDownstream();
-      flash("Combo saved");
+      flash(t("combos.saved"));
       setEditorState({ kind: "closed" });
       setEditorError(null);
     },
     onError: (err) => {
-      setEditorError(err instanceof Error ? err.message : "Failed to save");
+      setEditorError(err instanceof Error ? err.message : t("common.failedToSave"));
     },
   });
 
@@ -106,7 +108,7 @@ export default function Indicators() {
     mutationFn: (id: string) => deleteCombo(id),
     onSuccess: () => {
       invalidateDownstream();
-      flash("Combo deleted");
+      flash(t("combos.deleted"));
       setEditorState({ kind: "closed" });
     },
   });
@@ -122,10 +124,10 @@ export default function Indicators() {
     onSuccess: (_data, vars) => {
       invalidateDownstream();
       const combo = combos.find((c) => c.id === vars.comboId);
-      flash(`Added to ${combo?.name ?? "combo"}`);
+      flash(t("combos.addedTo", { name: combo?.name ?? t("combos.combo") }));
     },
     onError: (err) => {
-      flash(err instanceof Error ? err.message : "Failed to add");
+      flash(err instanceof Error ? err.message : t("common.failedToAdd"));
     },
   });
 
@@ -189,18 +191,18 @@ export default function Indicators() {
 
   function comboSummary(combo: Combo): string {
     const n = combo.indicatorIds.length;
-    const noun = n === 1 ? "indicator" : "indicators";
+    const noun = t("combos.indicator", { count: n });
     const abbrs = combo.indicatorIds
       .map((id) => metaById.get(id)?.abbreviation)
       .filter((a): a is string => Boolean(a));
-    if (abbrs.length === 0) return `${n} ${noun}`;
+    if (abbrs.length === 0) return noun;
     const shown = abbrs.slice(0, 3).join(" · ");
-    return `${n} ${noun} · ${shown}${abbrs.length > 3 ? " …" : ""}`;
+    return `${noun} · ${shown}${abbrs.length > 3 ? " …" : ""}`;
   }
 
   function openCreate(seedIndicatorId?: string) {
     if (atLimit) {
-      flash(`Combo limit reached (${MAX_COMBOS}).`);
+      flash(t("combos.limitReached", { max: MAX_COMBOS }));
       return;
     }
     setEditorError(null);
@@ -224,11 +226,12 @@ export default function Indicators() {
 
       <main className="main">
         <header className="page-head">
-          <h1 className="page-title">Indicators</h1>
+          <h1 className="page-title">{t("indicators.title")}</h1>
           <p className="page-sub">
-            Combine indicators into <span className="hl">combos</span>. A combo
-            turns <span className="hl">green</span> when every indicator inside
-            it triggers on the same bar.
+            <Trans
+              i18nKey="indicators.subtitle"
+              components={{ hl: <span className="hl" /> }}
+            />
           </p>
         </header>
 
@@ -236,9 +239,9 @@ export default function Indicators() {
         <section data-testid="combos-manager">
           <div className="section-head">
             <span className="section-title">
-              Your combos{" "}
+              {t("indicators.yourCombos")}{" "}
               <span className="count">
-                ({combos.length} / {MAX_COMBOS})
+                {t("indicators.comboCount", { count: combos.length, max: MAX_COMBOS })}
               </span>
             </span>
             <button
@@ -246,15 +249,15 @@ export default function Indicators() {
               className="new-btn"
               onClick={() => openCreate()}
               disabled={atLimit}
-              title={atLimit ? `Combo limit reached (${MAX_COMBOS})` : undefined}
+              title={atLimit ? t("combos.limitReached", { max: MAX_COMBOS }) : undefined}
               data-testid="combo-new"
             >
-              + NEW COMBO
+              {t("combos.new")}
             </button>
           </div>
 
           {combosQ.isPending ? (
-            <div className="combos-empty">Loading combos…</div>
+            <div className="combos-empty">{t("combos.loading")}</div>
           ) : (
             <div className="combos-grid">
               {combos.map((c) => (
@@ -269,7 +272,7 @@ export default function Indicators() {
                   <div className="combo-name">{c.name}</div>
                   <div className="combo-count">{comboSummary(c)}</div>
                   <div className="combo-foot">
-                    EDIT <span className="arrow">→</span>
+                    {t("combos.editAction")} <span className="arrow">→</span>
                   </div>
                 </button>
               ))}
@@ -279,12 +282,12 @@ export default function Indicators() {
                 onClick={() => openCreate()}
                 disabled={atLimit}
                 title={
-                  atLimit ? `Combo limit reached (${MAX_COMBOS})` : undefined
+                  atLimit ? t("combos.limitReached", { max: MAX_COMBOS }) : undefined
                 }
                 data-testid="combo-new-card"
               >
                 <div className="plus">+</div>
-                <div className="lbl">NEW COMBO</div>
+                <div className="lbl">{t("combos.newCard")}</div>
               </button>
             </div>
           )}
@@ -294,8 +297,10 @@ export default function Indicators() {
         <section data-testid="indicator-library-section">
           <div className="section-head">
             <span className="section-title">
-              Indicator library{" "}
-              {total > 0 && <span className="count">({total} available)</span>}
+              {t("indicators.library")}{" "}
+              {total > 0 && (
+                <span className="count">{t("indicators.available", { count: total })}</span>
+              )}
             </span>
           </div>
 
@@ -316,7 +321,11 @@ export default function Indicators() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder={`Search ${total > 0 ? `${total}+ ` : ""}indicators by name, code, or category…`}
+              placeholder={
+                total > 0
+                  ? t("indicators.searchPlaceholder", { count: total })
+                  : t("indicators.searchPlaceholderEmpty")
+              }
               autoComplete="off"
               spellCheck={false}
               data-testid="marketplace-search-input"
@@ -326,7 +335,7 @@ export default function Indicators() {
                 type="button"
                 className="clear"
                 onClick={() => setQuery("")}
-                aria-label="Clear search"
+                aria-label={t("indicators.clearSearch")}
               >
                 ×
               </button>
@@ -342,7 +351,7 @@ export default function Indicators() {
                 className={`chip${category === ALL_CATEGORIES ? " active" : ""}`}
                 onClick={() => setCategory(ALL_CATEGORIES)}
               >
-                All <span className="num">{total}</span>
+                {t("indicators.all")} <span className="num">{total}</span>
               </button>
               {categories.map((cat) => (
                 <button
@@ -359,15 +368,15 @@ export default function Indicators() {
 
           {isLoading && (
             <div className="lib-state" data-testid="marketplace-loading">
-              Loading indicators…
+              {t("indicators.loading")}
             </div>
           )}
 
           {!isLoading && filtered.length === 0 && (
             <div className="lib-state" data-testid="marketplace-empty">
               {query || category !== ALL_CATEGORIES
-                ? "No indicators match your filters."
-                : "No indicators available."}
+                ? t("indicators.noMatch")
+                : t("indicators.none")}
             </div>
           )}
 
@@ -390,7 +399,7 @@ export default function Indicators() {
               className="lib-sentinel"
               data-testid="marketplace-sentinel"
             >
-              Loading more…
+              {t("indicators.loadingMore")}
             </div>
           )}
         </section>
@@ -455,7 +464,7 @@ export default function Indicators() {
               ? async () => {
                   if (
                     !window.confirm(
-                      `Delete combo "${editorState.combo.name}"? This can't be undone.`,
+                      t("combos.deleteConfirm", { name: editorState.combo.name }),
                     )
                   ) {
                     return;
@@ -486,6 +495,7 @@ function LibraryCard({
   combos: Combo[];
   onOpen: () => void;
 }) {
+  const { t } = useTranslation();
   const inCombos = combos.filter((c) =>
     c.indicatorIds.includes(meta.id),
   ).length;
@@ -502,10 +512,10 @@ function LibraryCard({
         {inCombos > 0 && (
           <span
             className="ind-tag"
-            title={`In ${inCombos} ${inCombos === 1 ? "combo" : "combos"}`}
+            title={t("combos.inComboTitle", { count: inCombos })}
           >
             <span className="dot" />
-            IN {inCombos}
+            {t("combos.inCount", { count: inCombos })}
           </span>
         )}
       </div>
@@ -518,7 +528,7 @@ function LibraryCard({
       <div className="ind-foot">
         <span className="cat">{meta.category}</span>
         <span>
-          TAP <span className="arrow">→</span>
+          {t("indicators.tap")} <span className="arrow">→</span>
         </span>
       </div>
     </button>

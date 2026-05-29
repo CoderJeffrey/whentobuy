@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { formatPrice, marketBadge } from "../lib/symbol";
 import type { WatchlistItem as Item } from "../types";
 
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function WatchlistItem({ item, active, onRemove, removing }: Props) {
+  const { t } = useTranslation();
   const [hovered, setHovered] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
@@ -39,7 +41,7 @@ export function WatchlistItem({ item, active, onRemove, removing }: Props) {
     >
       {confirming ? (
         <div className="wl-confirm">
-          <span className="q">Remove {item.ticker}?</span>
+          <span className="q">{t("watchlist.removeConfirm", { ticker: item.ticker })}</span>
           <div style={{ display: "flex", gap: 6 }}>
             <button
               type="button"
@@ -50,7 +52,7 @@ export function WatchlistItem({ item, active, onRemove, removing }: Props) {
               }}
               data-testid="watchlist-confirm-yes"
             >
-              Yes
+              {t("common.yes")}
             </button>
             <button
               type="button"
@@ -60,7 +62,7 @@ export function WatchlistItem({ item, active, onRemove, removing }: Props) {
               }}
               data-testid="watchlist-confirm-no"
             >
-              No
+              {t("common.no")}
             </button>
           </div>
         </div>
@@ -90,7 +92,7 @@ export function WatchlistItem({ item, active, onRemove, removing }: Props) {
                   e.stopPropagation();
                   setConfirming(true);
                 }}
-                aria-label={`Remove ${item.ticker}`}
+                aria-label={t("watchlist.removeTicker", { ticker: item.ticker })}
                 className="wl-remove"
                 data-testid="watchlist-remove"
               >
@@ -114,7 +116,7 @@ export function WatchlistItem({ item, active, onRemove, removing }: Props) {
               )}
             </div>
           ) : (
-            <div className="wl-loading">Loading…</div>
+            <div className="wl-loading">{t("watchlist.itemLoading")}</div>
           )}
 
           {item.dataReady && (
@@ -125,10 +127,10 @@ export function WatchlistItem({ item, active, onRemove, removing }: Props) {
               <span className="dot" aria-hidden />
               <span>
                 {totalCombos === 0
-                  ? "No combos"
+                  ? t("watchlist.noCombos")
                   : anyGreen
-                    ? `${greenCount} ${greenCount === 1 ? "combo" : "combos"} triggered`
-                    : "No combos triggered"}
+                    ? t("watchlist.combosTriggered", { count: greenCount })
+                    : t("watchlist.noCombosTriggered")}
               </span>
             </div>
           )}

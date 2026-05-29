@@ -67,9 +67,12 @@ import {
   deleteUserAccount,
   findByUnsubscribeToken,
   getPreferences,
+  isValidLanguage,
   isValidTimeZone,
+  setLanguage,
   setNewsletterEnabled,
   setTimeZone,
+  type Language,
 } from "./services/preferences.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
@@ -661,10 +664,15 @@ app.delete("/api/watchlist/:ticker", async (req: AuthedRequest, res) => {
   }
 });
 
-function prefsView(prefs: { newsletterEnabled: boolean; timeZone: string }) {
+function prefsView(prefs: {
+  newsletterEnabled: boolean;
+  timeZone: string;
+  language: Language;
+}) {
   return {
     newsletter_enabled: prefs.newsletterEnabled,
     time_zone: prefs.timeZone,
+    language: prefs.language,
   };
 }
 
@@ -683,14 +691,16 @@ app.put("/api/preferences", async (req: AuthedRequest, res) => {
     const body = req.body as {
       newsletter_enabled?: unknown;
       time_zone?: unknown;
+      language?: unknown;
     };
     const hasNewsletter = body?.newsletter_enabled !== undefined;
     const hasTimeZone = body?.time_zone !== undefined;
+    const hasLanguage = body?.language !== undefined;
 
-    if (!hasNewsletter && !hasTimeZone) {
+    if (!hasNewsletter && !hasTimeZone && !hasLanguage) {
       res
         .status(400)
-        .json({ error: "newsletter_enabled or time_zone is required" });
+        .json({ error: "newsletter_enabled, time_zone, or language is required" });
       return;
     }
     if (hasNewsletter && typeof body.newsletter_enabled !== "boolean") {
@@ -704,6 +714,10 @@ app.put("/api/preferences", async (req: AuthedRequest, res) => {
       res.status(400).json({ error: "time_zone must be a valid IANA zone" });
       return;
     }
+    if (hasLanguage && !isValidLanguage(body.language)) {
+      res.status(400).json({ error: "language must be 'en' or 'zh'" });
+      return;
+    }
 
     const userId = req.user!.id;
     let prefs = await getPreferences(userId);
@@ -715,6 +729,9 @@ app.put("/api/preferences", async (req: AuthedRequest, res) => {
     }
     if (hasTimeZone) {
       prefs = await setTimeZone(userId, body.time_zone as string);
+    }
+    if (hasLanguage) {
+      prefs = await setLanguage(userId, body.language as Language);
     }
     res.json(prefsView(prefs));
   } catch (err) {

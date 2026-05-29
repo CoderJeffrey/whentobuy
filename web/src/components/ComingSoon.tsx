@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   title: string;
@@ -7,6 +8,7 @@ interface Props {
 }
 
 export function ComingSoon({ title, description, icon: Icon }: Props) {
+  const { t } = useTranslation();
   return (
     <section
       className="rounded-2xl p-16 flex flex-col items-center justify-center gap-4 text-center"
@@ -39,7 +41,7 @@ export function ComingSoon({ title, description, icon: Icon }: Props) {
         className="mt-2 text-[11px] tracking-label uppercase"
         style={{ color: "var(--text-tertiary)", fontWeight: 500 }}
       >
-        Coming soon
+        {t("comingSoon.label")}
       </div>
     </section>
   );

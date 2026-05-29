@@ -208,6 +208,7 @@ export async function removeWatchlistTicker(
 export interface UserPreferences {
   newsletter_enabled: boolean;
   time_zone: string;
+  language: "en" | "zh";
 }
 
 export async function fetchPreferences(): Promise<UserPreferences> {

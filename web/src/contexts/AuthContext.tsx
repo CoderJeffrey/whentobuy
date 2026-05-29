@@ -9,6 +9,8 @@ import {
 } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
+import { fetchPreferences } from "../lib/api";
+import i18n from "../i18n";
 import {
   DEV_BYPASS_AVAILABLE,
   DEV_USER_EMAIL,
@@ -94,6 +96,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       sub.subscription.unsubscribe();
     };
   }, [devActive]);
+
+  // After auth, sync the cross-device language preference from the DB. The UI
+  // already rendered in the localStorage language (instant); this only switches
+  // if the saved DB preference differs (e.g. first load on a new device).
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    fetchPreferences()
+      .then((prefs) => {
+        if (!active) return;
+        if (prefs.language && prefs.language !== i18n.language) {
+          void i18n.changeLanguage(prefs.language);
+        }
+      })
+      .catch(() => {
+        // Non-fatal: keep the localStorage-detected language.
+      });
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
   const signInWithGoogle = useCallback(async () => {
     await supabase.auth.signInWithOAuth({

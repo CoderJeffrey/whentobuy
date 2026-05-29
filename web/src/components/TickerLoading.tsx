@@ -1,10 +1,5 @@
 import { useEffect, useState } from "react";
-
-const MESSAGES = [
-  "Fetching price history…",
-  "Computing indicators…",
-  "Almost done…",
-];
+import { useTranslation } from "react-i18next";
 
 export function TickerLoading({
   ticker,
@@ -13,14 +8,20 @@ export function TickerLoading({
   ticker: string;
   name?: string;
 }) {
+  const { t } = useTranslation();
+  const messages = [
+    t("tickerLoading.fetchingHistory"),
+    t("tickerLoading.computingIndicators"),
+    t("tickerLoading.almostDone"),
+  ];
   const [idx, setIdx] = useState(0);
 
   useEffect(() => {
     const t = setInterval(() => {
-      setIdx((i) => (i + 1) % MESSAGES.length);
+      setIdx((i) => (i + 1) % messages.length);
     }, 2000);
     return () => clearInterval(t);
-  }, []);
+  }, [messages.length]);
 
   return (
     <section
@@ -69,15 +70,13 @@ export function TickerLoading({
           aria-live="polite"
           style={{ color: "var(--text-primary)", fontWeight: 500 }}
         >
-          {MESSAGES[idx]}
+          {messages[idx]}
         </div>
         <div
           className="text-xs text-center"
           style={{ color: "var(--text-tertiary)" }}
         >
-          Fetching 3 years of price history from Yahoo.
-          <br />
-          This only happens once. Usually 3–8 seconds.
+          {t("tickerLoading.detail")}
         </div>
       </div>
     </section>

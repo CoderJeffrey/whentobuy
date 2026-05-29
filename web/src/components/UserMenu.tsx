@@ -1,4 +1,5 @@
 import { LogOut } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "../contexts/AuthContext";
 
 function initials(name: string, email: string): string {
@@ -12,6 +13,7 @@ function initials(name: string, email: string): string {
 }
 
 export function UserMenu() {
+  const { t } = useTranslation();
   const { user, signOut } = useAuth();
   if (!user) return null;
   const display = user.name?.trim() || user.email.split("@")[0] || "User";
@@ -42,10 +44,10 @@ export function UserMenu() {
           void signOut();
         }}
         className="nav-item"
-        aria-label="Sign out"
+        aria-label={t("common.signOut")}
       >
         <LogOut size={18} strokeWidth={1.75} />
-        <span className="nav-label">Sign out</span>
+        <span className="nav-label">{t("common.signOut")}</span>
       </button>
     </div>
   );

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { Combo, IndicatorMeta } from "../types";
 import "./Modal.css";
 
@@ -19,6 +20,7 @@ export function IndicatorDetailModal({
   onAddToCombo,
   onCreateCombo,
 }: Props) {
+  const { t } = useTranslation();
   const [pickerOpen, setPickerOpen] = useState(false);
 
   useEffect(() => {
@@ -53,7 +55,7 @@ export function IndicatorDetailModal({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t("common.close")}
             className="modal-close"
           >
             ×
@@ -62,7 +64,7 @@ export function IndicatorDetailModal({
 
         <div className="modal-body">
           <section>
-            <h4 className="sec-label">About</h4>
+            <h4 className="sec-label">{t("indicators.about")}</h4>
             <p className="about-text">{meta.description}</p>
           </section>
         </div>
@@ -86,22 +88,22 @@ export function IndicatorDetailModal({
               className="btn btn-outline"
               title={
                 eligibleCombos.length === 0
-                  ? "Already in every combo"
-                  : "Add to an existing combo"
+                  ? t("indicators.alreadyInEvery")
+                  : t("indicators.addToExisting")
               }
               data-testid="indicator-add-to-combo"
             >
-              ADD TO COMBO
+              {t("indicators.addToCombo")}
             </button>
             <button
               type="button"
               onClick={onCreateCombo}
               disabled={atLimit}
               className="btn btn-primary"
-              title={atLimit ? `Combo limit reached (${maxCombos})` : undefined}
+              title={atLimit ? t("combos.limitReached", { max: maxCombos }) : undefined}
               data-testid="indicator-create-combo"
             >
-              + CREATE COMBO
+              {t("indicators.createCombo")}
             </button>
           </div>
         )}
@@ -121,17 +123,18 @@ function ComboPicker({
   onCancel: () => void;
   onPick: (comboId: string) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="modal-foot" data-testid="combo-picker">
       <div style={{ width: "100%" }}>
         <div className="sec-head">
-          <h4 className="sec-label">Pick a combo</h4>
+          <h4 className="sec-label">{t("indicators.pickCombo")}</h4>
           <button type="button" onClick={onCancel} className="link-btn">
-            Cancel
+            {t("common.cancel")}
           </button>
         </div>
         {combos.length === 0 ? (
-          <div className="empty">No combos yet. Create one first.</div>
+          <div className="empty">{t("indicators.noCombosFirst")}</div>
         ) : (
           <div className="rows">
             {combos.map((c) => {
@@ -149,7 +152,9 @@ function ComboPicker({
                     <span className="pr-name">{c.name}</span>
                   </span>
                   <span className={`pr-tag${has ? " in" : ""}`}>
-                    {has ? "✓ IN COMBO" : `${c.indicatorIds.length} IND`}
+                    {has
+                      ? t("indicators.inCombo")
+                      : t("indicators.indCount", { count: c.indicatorIds.length })}
                   </span>
                 </button>
               );

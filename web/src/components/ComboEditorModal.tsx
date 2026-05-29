@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import type { Combo, IndicatorMeta } from "../types";
 import "./Modal.css";
 
@@ -23,6 +24,7 @@ export function ComboEditorModal({
   onDelete,
   error,
 }: Props) {
+  const { t } = useTranslation();
   const [name, setName] = useState<string>(() => initial?.name ?? "");
   const [indicatorIds, setIndicatorIds] = useState<string[]>(() => {
     const base = initial?.indicatorIds ?? [];
@@ -80,12 +82,12 @@ export function ComboEditorModal({
       <div className="modal modal-md">
         <div className="modal-head">
           <div className="modal-title">
-            {mode === "create" ? "New combo" : "Edit combo"}
+            {mode === "create" ? t("comboEditor.newTitle") : t("comboEditor.editTitle")}
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t("common.close")}
             className="modal-close"
           >
             ×
@@ -95,14 +97,14 @@ export function ComboEditorModal({
         <div className="modal-body">
           <div className="field">
             <label className="sec-label" htmlFor="combo-name">
-              Name
+              {t("comboEditor.name")}
             </label>
             <input
               id="combo-name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Oversold + Uptrend"
+              placeholder={t("comboEditor.namePlaceholder")}
               className="field-input"
               autoComplete="off"
               spellCheck={false}
@@ -112,21 +114,21 @@ export function ComboEditorModal({
 
           <div>
             <div className="sec-head">
-              <h4 className="sec-label">Indicators ({indicatorIds.length})</h4>
+              <h4 className="sec-label">
+                {t("comboEditor.indicators", { count: indicatorIds.length })}
+              </h4>
               <button
                 type="button"
                 onClick={() => setPickerOpen((v) => !v)}
                 className="link-btn"
                 data-testid="combo-add-indicator"
               >
-                {pickerOpen ? "Close picker" : "+ Add indicator"}
+                {pickerOpen ? t("comboEditor.closePicker") : t("comboEditor.addIndicator")}
               </button>
             </div>
 
             {indicatorIds.length === 0 && !pickerOpen && (
-              <div className="empty">
-                No indicators yet. Add at least one to save.
-              </div>
+              <div className="empty">{t("comboEditor.emptyIndicators")}</div>
             )}
 
             {indicatorIds.length > 0 && (
@@ -149,9 +151,9 @@ export function ComboEditorModal({
                         type="button"
                         onClick={() => removeIndicator(id)}
                         className="pr-remove"
-                        aria-label={`Remove ${meta?.label ?? id}`}
+                        aria-label={t("comboEditor.removeIndicator", { name: meta?.label ?? id })}
                       >
-                        Remove
+                        {t("common.remove")}
                       </button>
                     </div>
                   );
@@ -171,8 +173,7 @@ export function ComboEditorModal({
           </div>
 
           <div className="hint">
-            This combo turns <em>green</em> when <em>all</em> indicators above
-            are triggered on the same bar.
+            <Trans i18nKey="comboEditor.hint" components={{ em: <em /> }} />
           </div>
 
           {error && (
@@ -191,13 +192,13 @@ export function ComboEditorModal({
                 className="btn-danger-text"
                 data-testid="combo-editor-delete"
               >
-                Delete combo
+                {t("comboEditor.deleteCombo")}
               </button>
             )}
           </div>
           <div className="foot-right">
             <button type="button" onClick={onClose} className="btn btn-outline">
-              CANCEL
+              {t("common.cancel")}
             </button>
             <button
               type="button"
@@ -206,7 +207,7 @@ export function ComboEditorModal({
               className="btn btn-primary"
               data-testid="combo-editor-save"
             >
-              {saving ? "SAVING…" : "SAVE"}
+              {saving ? t("common.saving") : t("common.save")}
             </button>
           </div>
         </div>
@@ -224,6 +225,7 @@ function IndicatorPickerInline({
   excludeIds: Set<string>;
   onPick: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -246,7 +248,7 @@ function IndicatorPickerInline({
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search indicators…"
+        placeholder={t("comboEditor.searchPlaceholder")}
         className="search-input"
         autoComplete="off"
         spellCheck={false}
@@ -254,7 +256,7 @@ function IndicatorPickerInline({
       />
       <div className="picker-list">
         {filtered.length === 0 && (
-          <div className="empty">No matches.</div>
+          <div className="empty">{t("comboEditor.noMatches")}</div>
         )}
         {filtered.map((m) => (
           <button
