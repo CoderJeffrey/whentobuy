@@ -20,7 +20,9 @@ export interface EmailComboMatch {
 }
 
 export interface EmailTickerReady {
+  symbol: string;
   ticker: string;
+  currency: string;
   name: string;
   dataReady: true;
   currentPrice: number;
@@ -31,9 +33,15 @@ export interface EmailTickerReady {
 }
 
 export interface EmailTickerPending {
+  symbol: string;
   ticker: string;
+  currency: string;
   name: string;
   dataReady: false;
+}
+
+function priceSymbol(currency: string): string {
+  return currency === "CNY" ? "¥" : "$";
 }
 
 export type EmailTickerData = EmailTickerReady | EmailTickerPending;
@@ -135,11 +143,11 @@ function PendingTickerCard({ data }: { data: EmailTickerPending }) {
 function ComboMatches({
   greenCombos,
   appUrl,
-  ticker,
+  symbol,
 }: {
   greenCombos: EmailComboMatch[];
   appUrl: string;
-  ticker: string;
+  symbol: string;
 }) {
   if (greenCombos.length === 0) {
     return (
@@ -186,7 +194,7 @@ function ComboMatches({
       ))}
       <Section style={{ marginTop: "12px", textAlign: "center" as const }}>
         <Button
-          href={`${appUrl}/dashboard/${ticker}`}
+          href={`${appUrl}/dashboard/${symbol}`}
           style={{
             backgroundColor: COLORS.bgCardRaised,
             border: `1px solid ${COLORS.borderStrong}`,
@@ -230,7 +238,8 @@ function ReadyTickerCard({
               margin: "6px 0 0",
             }}
           >
-            ${data.currentPrice.toFixed(2)}
+            {priceSymbol(data.currency)}
+            {data.currentPrice.toFixed(2)}
             <span
               style={{
                 color: positive ? COLORS.positive : COLORS.negative,
@@ -248,7 +257,7 @@ function ReadyTickerCard({
       <ComboMatches
         greenCombos={data.greenCombos}
         appUrl={appUrl}
-        ticker={data.ticker}
+        symbol={data.symbol}
       />
     </CardShell>
   );
@@ -353,7 +362,7 @@ export function DailyDigest({
           </Section>
 
           {tickers.map((t) => (
-            <TickerCard key={t.ticker} data={t} appUrl={appUrl} />
+            <TickerCard key={t.symbol} data={t} appUrl={appUrl} />
           ))}
 
           {hasMore && <ExploreMoreCta appUrl={appUrl} />}

@@ -34,6 +34,16 @@ export function toYahooTicker(ticker: string): string {
   return ticker.replace(/\./g, "-");
 }
 
+/**
+ * Map a stored (ticker, exchange) to the symbol yahoo-finance2 understands.
+ * US uses the dash class-share form; China appends the exchange suffix
+ * (600519 + SS → 600519.SS, 000001 + SZ → 000001.SZ).
+ */
+export function toYahooSymbol(ticker: string, exchange: string): string {
+  if (exchange.toUpperCase() === "US") return toYahooTicker(ticker);
+  return `${ticker}.${exchange.toUpperCase()}`;
+}
+
 function isoDate(d: Date): string {
   // Yahoo's bar `date` is an instant; the US daily session belongs to the
   // exchange tz. Slicing the UTC date can land one day off (e.g. label a
@@ -52,10 +62,10 @@ function num(v: number | null | undefined): string {
   return v == null ? "NULL" : String(v);
 }
 
-async function isCached(ticker: string): Promise<boolean> {
+async function isCached(ticker: string, exchange: string): Promise<boolean> {
   const db = await getDb();
   const reader = await db.runAndReadAll(
-    `SELECT status FROM ticker_cache WHERE ticker = ${sqlLit(ticker)}`,
+    `SELECT status FROM ticker_cache WHERE ticker = ${sqlLit(ticker)} AND exchange = ${sqlLit(exchange)}`,
   );
   const rows = reader.getRowObjectsJS();
   return rows.length > 0 && rows[0]!.status === "ok";
@@ -92,12 +102,16 @@ function classifyYahooError(err: unknown): Error {
   return new NetworkError(msg);
 }
 
-async function markCache(ticker: string, status: "ok" | "failed"): Promise<void> {
+async function markCache(
+  ticker: string,
+  exchange: string,
+  status: "ok" | "failed",
+): Promise<void> {
   const db = await getDb();
   await db.run(
-    `INSERT INTO ticker_cache (ticker, last_fetched_at, status)
-     VALUES (${sqlLit(ticker)}, now(), ${sqlLit(status)})
-     ON CONFLICT (ticker) DO UPDATE
+    `INSERT INTO ticker_cache (ticker, exchange, last_fetched_at, status)
+     VALUES (${sqlLit(ticker)}, ${sqlLit(exchange)}, now(), ${sqlLit(status)})
+     ON CONFLICT (ticker, exchange) DO UPDATE
        SET last_fetched_at = now(), status = ${sqlLit(status)}`,
   );
 }
@@ -108,20 +122,22 @@ export async function refreshAllCachedTickers(): Promise<{
 }> {
   const db = await getDb();
   const reader = await db.runAndReadAll(
-    `SELECT DISTINCT ticker FROM ticker_cache`,
+    `SELECT DISTINCT ticker, exchange FROM ticker_cache`,
   );
-  const tickers = reader.getRowObjectsJS().map((r) => String(r.ticker));
-  console.log(`[refresh] refreshing ${tickers.length} ticker(s)`);
+  const entries = reader
+    .getRowObjectsJS()
+    .map((r) => ({ ticker: String(r.ticker), exchange: String(r.exchange) }));
+  console.log(`[refresh] refreshing ${entries.length} ticker(s)`);
 
   let ok = 0;
   let failed = 0;
-  for (const t of tickers) {
+  for (const e of entries) {
     try {
-      await ensureTickerData(t, { force: true });
+      await ensureTickerData(e.ticker, e.exchange, { force: true });
       ok += 1;
     } catch (err) {
       failed += 1;
-      console.warn(`[refresh] ${t} failed:`, err);
+      console.warn(`[refresh] ${e.ticker}.${e.exchange} failed:`, err);
     }
   }
   console.log(`[refresh] complete: ${ok} ok, ${failed} failed`);
@@ -130,10 +146,12 @@ export async function refreshAllCachedTickers(): Promise<{
 
 export async function ensureTickerData(
   ticker: string,
+  exchange = "US",
   opts: { force?: boolean } = {},
 ): Promise<void> {
   const sym = ticker.toUpperCase();
-  if (!opts.force && (await isCached(sym))) return;
+  const exch = exchange.toUpperCase();
+  if (!opts.force && (await isCached(sym, exch))) return;
 
   const period2 = new Date();
   const period1 = new Date();
@@ -141,7 +159,7 @@ export async function ensureTickerData(
 
   let chart: ChartResultArray;
   try {
-    chart = await yahooFinance.chart(toYahooTicker(sym), {
+    chart = await yahooFinance.chart(toYahooSymbol(sym, exch), {
       period1,
       period2,
       interval: "1d",
@@ -152,7 +170,7 @@ export async function ensureTickerData(
     if (classified instanceof TickerNotFoundError) {
       classified.message = `Ticker not found: ${sym}`;
     }
-    await markCache(sym, "failed");
+    await markCache(sym, exch, "failed");
     throw classified;
   }
 
@@ -166,7 +184,7 @@ export async function ensureTickerData(
   );
 
   if (quotes.length === 0) {
-    await markCache(sym, "failed");
+    await markCache(sym, exch, "failed");
     throw new TickerNotFoundError(sym);
   }
 
@@ -175,19 +193,23 @@ export async function ensureTickerData(
   const ind = computeIndicators(closes, volumes);
 
   const db = await getDb();
-  await db.run(`DELETE FROM prices WHERE ticker = ${sqlLit(sym)}`);
-  await db.run(`DELETE FROM indicators WHERE ticker = ${sqlLit(sym)}`);
+  await db.run(
+    `DELETE FROM prices WHERE ticker = ${sqlLit(sym)} AND exchange = ${sqlLit(exch)}`,
+  );
+  await db.run(
+    `DELETE FROM indicators WHERE ticker = ${sqlLit(sym)} AND exchange = ${sqlLit(exch)}`,
+  );
 
   const priceValuesSql = quotes
     .map((q) => {
       const d = sqlLit(isoDate(q.date));
       const adj = q.adjclose ?? q.close;
-      return `(${sqlLit(sym)}, ${d}, ${q.open}, ${q.high}, ${q.low}, ${q.close}, ${adj}, ${q.volume})`;
+      return `(${sqlLit(sym)}, ${sqlLit(exch)}, ${d}, ${q.open}, ${q.high}, ${q.low}, ${q.close}, ${adj}, ${q.volume})`;
     })
     .join(",\n");
 
   await db.run(
-    `INSERT INTO prices (ticker, date, open, high, low, close, adj_close, volume) VALUES\n${priceValuesSql}`,
+    `INSERT INTO prices (ticker, exchange, date, open, high, low, close, adj_close, volume) VALUES\n${priceValuesSql}`,
   );
 
   const indicatorValuesSql = quotes
@@ -205,13 +227,13 @@ export async function ensureTickerData(
         num(ind.pctFrom52wLow[i]),
         num(ind.volumeAvg20[i]),
       ];
-      return `(${sqlLit(sym)}, ${d}, ${cols.join(", ")})`;
+      return `(${sqlLit(sym)}, ${sqlLit(exch)}, ${d}, ${cols.join(", ")})`;
     })
     .join(",\n");
 
   await db.run(
-    `INSERT INTO indicators (ticker, date, rsi_14, sma_20, sma_50, sma_200, macd, macd_signal, macd_cross_up, bb_lower, pct_from_52w_low, volume_avg_20) VALUES\n${indicatorValuesSql}`,
+    `INSERT INTO indicators (ticker, exchange, date, rsi_14, sma_20, sma_50, sma_200, macd, macd_signal, macd_cross_up, bb_lower, pct_from_52w_low, volume_avg_20) VALUES\n${indicatorValuesSql}`,
   );
 
-  await markCache(sym, "ok");
+  await markCache(sym, exch, "ok");
 }

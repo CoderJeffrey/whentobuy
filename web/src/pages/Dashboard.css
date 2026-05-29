@@ -445,3 +445,33 @@
   .dbg .watchlist-panel { border-left: none; border-top: 1px solid var(--d-border); }
   .dbg .ticker-meta { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* Market badges (US / CN) — monochrome pill */
+.dbg .mkt-badge {
+  display: inline-block;
+  font-family: var(--d-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--d-border);
+  color: var(--d-fg-3);
+  vertical-align: middle;
+  margin-left: 6px;
+}
+.dbg .mkt-badge.mkt-cn {
+  color: var(--d-fg-2);
+  border-color: var(--d-border-strong);
+}
+/* Column-layout result rows: pin the badge to the top-right */
+.dbg .search-result,
+.dbg .wl-picker-result { position: relative; }
+.dbg .search-result .mkt-badge,
+.dbg .wl-picker-result .mkt-badge {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  margin-left: 0;
+}

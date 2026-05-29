@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { formatPrice, marketBadge } from "../lib/symbol";
 import type { WatchlistItem as Item } from "../types";
 
 interface Props {
   item: Item;
   active: boolean;
-  onRemove: (ticker: string) => void;
+  onRemove: (symbol: string) => void;
   removing: boolean;
 }
 
@@ -45,7 +46,7 @@ export function WatchlistItem({ item, active, onRemove, removing }: Props) {
               disabled={removing}
               onClick={(e) => {
                 e.preventDefault();
-                onRemove(item.ticker);
+                onRemove(item.symbol);
               }}
               data-testid="watchlist-confirm-yes"
             >
@@ -65,13 +66,20 @@ export function WatchlistItem({ item, active, onRemove, removing }: Props) {
         </div>
       ) : (
         <Link
-          to={`/dashboard/${item.ticker}`}
+          to={`/dashboard/${item.symbol}`}
           style={{ display: "block" }}
           data-testid="watchlist-item-link"
         >
           <div className="wl-row">
             <div style={{ minWidth: 0 }}>
-              <div className="wl-tk">{item.ticker}</div>
+              <div className="wl-tk">
+                {item.ticker}
+                <span
+                  className={`mkt-badge mkt-${marketBadge(item.exchange).toLowerCase()}`}
+                >
+                  {marketBadge(item.exchange)}
+                </span>
+              </div>
               <div className="wl-name">{item.name}</div>
             </div>
             {hovered && (
@@ -95,7 +103,7 @@ export function WatchlistItem({ item, active, onRemove, removing }: Props) {
             <div className="wl-price-row">
               <span className="wl-price">
                 {item.currentPrice != null
-                  ? `$${item.currentPrice.toFixed(2)}`
+                  ? formatPrice(item.currentPrice, item.currency)
                   : "—"}
               </span>
               {item.priceChangePct != null && (

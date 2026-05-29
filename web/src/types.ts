@@ -49,6 +49,10 @@ export interface Combo {
 
 export interface DashboardResponse {
   ticker: string;
+  exchange: string;
+  symbol: string;
+  market: string;
+  currency: string;
   name: string;
   asOf: string;
   currentPrice: number;
@@ -62,12 +66,18 @@ export interface DashboardResponse {
 
 export interface Security {
   ticker: string;
+  exchange: string;
+  market: string;
   name: string;
   cik?: number | null;
 }
 
 export interface WatchlistItem {
+  symbol: string;
   ticker: string;
+  exchange: string;
+  market: string;
+  currency: string;
   name: string;
   dataReady: boolean;
   currentPrice?: number;

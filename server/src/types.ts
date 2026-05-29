@@ -56,6 +56,10 @@ export interface Combo {
 
 export interface DashboardResponse {
   ticker: string;
+  exchange: string;
+  symbol: string;
+  market: string;
+  currency: string;
   name: string;
   asOf: string;
   currentPrice: number;
@@ -77,7 +81,13 @@ export interface PriceRow {
 }
 
 export interface WatchlistItem {
+  /** Qualified symbol used for routing/removal, e.g. "600519.SS". */
+  symbol: string;
+  /** Bare display ticker, e.g. "600519". */
   ticker: string;
+  exchange: string;
+  market: string;
+  currency: string;
   name: string;
   dataReady: boolean;
   currentPrice?: number;

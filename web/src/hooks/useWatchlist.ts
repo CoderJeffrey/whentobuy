@@ -25,23 +25,23 @@ export function useWatchlist() {
   });
 
   const add = useMutation({
-    mutationFn: (ticker: string) => addWatchlistTicker(ticker),
-    onSuccess: (data, ticker) => {
+    mutationFn: (symbol: string) => addWatchlistTicker(symbol),
+    onSuccess: (data, symbol) => {
       qc.setQueryData<WatchlistResponse>(QUERY_KEY, {
         tickers: data.tickers,
       });
-      qc.invalidateQueries({ queryKey: ["dashboard", ticker.toUpperCase()] });
+      qc.invalidateQueries({ queryKey: ["dashboard", symbol.toUpperCase()] });
     },
   });
 
   const remove = useMutation({
-    mutationFn: (ticker: string) => removeWatchlistTicker(ticker),
-    onMutate: async (ticker) => {
+    mutationFn: (symbol: string) => removeWatchlistTicker(symbol),
+    onMutate: async (symbol) => {
       await qc.cancelQueries({ queryKey: QUERY_KEY });
       const prev = qc.getQueryData<WatchlistResponse>(QUERY_KEY);
       if (prev) {
         qc.setQueryData<WatchlistResponse>(QUERY_KEY, {
-          tickers: prev.tickers.filter((t) => t.ticker !== ticker),
+          tickers: prev.tickers.filter((t) => t.symbol !== symbol),
         });
       }
       return { prev };

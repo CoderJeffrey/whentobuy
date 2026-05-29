@@ -4,20 +4,25 @@ import { getDb } from "../db.js";
 
 export interface Security {
   ticker: string;
+  exchange: string;
   name: string;
+  market: string;
   cik: number | null;
 }
 
 interface SecEntry {
   ticker: string;
+  exchange: string;
   name: string;
-  cik: number;
+  market: string;
+  cik: number | null;
 }
 
 const SEC_PATH = resolve("./data/sec-tickers.json");
+const ASHARES_PATH = resolve("./data/china-ashares.json");
 
-// If the securities table has at most this many rows, assume it's the
-// legacy S&P 500 seed and replace with the full SEC list.
+// If the US securities set has at most this many rows, assume it's the legacy
+// S&P 500 seed and replace with the full SEC list.
 const LEGACY_MAX_ROWS = 1000;
 
 function sqlLit(s: string): string {
@@ -32,17 +37,35 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
-async function readSecList(): Promise<SecEntry[]> {
-  const raw = readFileSync(SEC_PATH, "utf8");
-  const list = JSON.parse(raw) as unknown;
-  if (!Array.isArray(list)) {
-    throw new Error(`sec-tickers.json is not an array`);
-  }
-  return list.map((e) => ({
-    ticker: String((e as SecEntry).ticker).toUpperCase(),
-    name: String((e as SecEntry).name),
-    cik: Number((e as SecEntry).cik),
-  }));
+function readSecList(): SecEntry[] {
+  const list = JSON.parse(readFileSync(SEC_PATH, "utf8")) as unknown;
+  if (!Array.isArray(list)) throw new Error("sec-tickers.json is not an array");
+  return list.map((e) => {
+    const r = e as { ticker: unknown; name: unknown; cik: unknown };
+    return {
+      ticker: String(r.ticker).toUpperCase(),
+      exchange: "US",
+      name: String(r.name),
+      market: "us",
+      cik: Number.isFinite(Number(r.cik)) ? Number(r.cik) : null,
+    };
+  });
+}
+
+function readAShareList(): SecEntry[] {
+  const list = JSON.parse(readFileSync(ASHARES_PATH, "utf8")) as unknown;
+  if (!Array.isArray(list))
+    throw new Error("china-ashares.json is not an array");
+  return list.map((e) => {
+    const r = e as { ticker: unknown; exchange: unknown; name: unknown };
+    return {
+      ticker: String(r.ticker).toUpperCase(),
+      exchange: String(r.exchange).toUpperCase(),
+      name: String(r.name),
+      market: "china",
+      cik: null,
+    };
+  });
 }
 
 async function bulkInsert(list: SecEntry[]): Promise<void> {
@@ -51,69 +74,90 @@ async function bulkInsert(list: SecEntry[]): Promise<void> {
     const values = batch
       .map(
         (s) =>
-          `(${sqlLit(s.ticker)}, ${sqlLit(s.name)}, ${
-            Number.isFinite(s.cik) ? s.cik : "NULL"
+          `(${sqlLit(s.ticker)}, ${sqlLit(s.exchange)}, ${sqlLit(s.name)}, ${sqlLit(s.market)}, ${
+            s.cik != null && Number.isFinite(s.cik) ? s.cik : "NULL"
           })`,
       )
       .join(",\n");
     await db.run(
-      `INSERT INTO securities (ticker, name, cik) VALUES\n${values}`,
+      `INSERT INTO securities (ticker, exchange, name, market, cik) VALUES\n${values}`,
     );
   }
+}
+
+async function countMarket(market: string): Promise<number> {
+  const db = await getDb();
+  const reader = await db.runAndReadAll(
+    `SELECT COUNT(*) AS c FROM securities WHERE market = ${sqlLit(market)}`,
+  );
+  return Number(reader.getRowObjectsJS()[0]?.c ?? 0);
 }
 
 /**
- * Ensures the securities table is populated from the SEC list.
- * Replaces existing rows if the table looks empty or still holds the
- * legacy S&P 500 seed.
+ * Populate the securities table with the unified US + China universe.
+ * US rows come from the SEC list (replacing a legacy S&P 500 seed if present);
+ * China A-shares come from the committed Eastmoney scrape.
  */
 export async function ensureSecuritiesLoaded(): Promise<void> {
   const db = await getDb();
-  const reader = await db.runAndReadAll(
-    "SELECT COUNT(*) AS c FROM securities",
-  );
-  const count = Number(reader.getRowObjectsJS()[0]?.c ?? 0);
 
-  let list: SecEntry[];
+  // US (SEC) rows.
   try {
-    list = await readSecList();
+    const usList = readSecList();
+    if (usList.length > 0) {
+      const usCount = await countMarket("us");
+      if (usCount === 0) {
+        console.log(`[securities] seeding ${usList.length} SEC (US) entries`);
+        await bulkInsert(usList);
+      } else if (usCount <= LEGACY_MAX_ROWS) {
+        console.log(
+          `[securities] replacing ${usCount} legacy US rows with ${usList.length} SEC entries`,
+        );
+        await db.run("DELETE FROM securities WHERE market = 'us'");
+        await bulkInsert(usList);
+      }
+    }
   } catch (err) {
-    console.warn(
-      `[securities] sec-tickers.json not available at ${SEC_PATH}: ${String(err)}`,
-    );
-    return;
-  }
-  if (list.length === 0) return;
-
-  if (count > 0 && count > LEGACY_MAX_ROWS) {
-    return;
+    console.warn(`[securities] SEC list unavailable: ${String(err)}`);
   }
 
-  if (count > 0) {
-    console.log(
-      `[securities] replacing ${count} legacy rows with ${list.length} SEC entries`,
-    );
-    await db.run("DELETE FROM securities");
-  } else {
-    console.log(`[securities] seeding ${list.length} SEC entries`);
+  // China A-share rows.
+  try {
+    const cnCount = await countMarket("china");
+    if (cnCount === 0) {
+      const cnList = readAShareList();
+      if (cnList.length > 0) {
+        console.log(`[securities] seeding ${cnList.length} China A-shares`);
+        await bulkInsert(cnList);
+      }
+    }
+  } catch (err) {
+    console.warn(`[securities] A-share list unavailable: ${String(err)}`);
   }
-
-  await bulkInsert(list);
 }
 
-export async function getSecurity(ticker: string): Promise<Security | null> {
-  const db = await getDb();
-  const reader = await db.runAndReadAll(
-    `SELECT ticker, name, cik FROM securities WHERE ticker = ${sqlLit(ticker.toUpperCase())}`,
-  );
-  const rows = reader.getRowObjectsJS();
-  if (rows.length === 0) return null;
-  const r = rows[0]!;
+function mapRow(r: Record<string, unknown>): Security {
   return {
     ticker: String(r.ticker),
+    exchange: String(r.exchange),
     name: String(r.name),
+    market: String(r.market),
     cik: r.cik == null ? null : Number(r.cik),
   };
+}
+
+export async function getSecurity(
+  ticker: string,
+  exchange: string,
+): Promise<Security | null> {
+  const db = await getDb();
+  const reader = await db.runAndReadAll(
+    `SELECT ticker, exchange, name, market, cik FROM securities
+     WHERE ticker = ${sqlLit(ticker.toUpperCase())}
+       AND exchange = ${sqlLit(exchange.toUpperCase())}`,
+  );
+  const rows = reader.getRowObjectsJS();
+  return rows.length === 0 ? null : mapRow(rows[0]!);
 }
 
 export async function searchSecurities(
@@ -126,7 +170,7 @@ export async function searchSecurities(
   const lit = sqlLit(trimmed.toLowerCase());
   const cappedLimit = Math.max(1, Math.min(50, Math.floor(limit)));
   const reader = await db.runAndReadAll(
-    `SELECT ticker, name, cik FROM securities
+    `SELECT ticker, exchange, name, market, cik FROM securities
      WHERE lower(ticker) LIKE ${lit} || '%'
         OR lower(name) LIKE '%' || ${lit} || '%'
      ORDER BY
@@ -141,9 +185,5 @@ export async function searchSecurities(
        ticker
      LIMIT ${cappedLimit}`,
   );
-  return reader.getRowObjectsJS().map((r) => ({
-    ticker: String(r.ticker),
-    name: String(r.name),
-    cik: r.cik == null ? null : Number(r.cik),
-  }));
+  return reader.getRowObjectsJS().map(mapRow);
 }

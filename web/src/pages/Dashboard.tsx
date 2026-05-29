@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 import { fetchDashboard } from "../lib/api";
 import { PriceChart } from "../components/PriceChart";
 import { SearchBar } from "../components/SearchBar";
 import { Watchlist } from "../components/Watchlist";
+import { formatPrice, formatSymbol, marketBadge, parseSymbol } from "../lib/symbol";
 import type { ComboStatus, DashboardResponse } from "../types";
 import "./Dashboard.css";
 
@@ -31,15 +32,24 @@ function formatVolume(v: number | undefined): string {
 }
 
 export default function Dashboard() {
-  const { symbol } = useParams<{ symbol: string }>();
-  const ticker = (symbol ?? "AAPL").toUpperCase();
+  const { symbol: symbolParam } = useParams<{ symbol: string }>();
+  const raw = symbolParam ?? "AAPL.US";
+  const parsed = parseSymbol(raw);
+  const symbol = formatSymbol(parsed.ticker, parsed.exchange);
+  const ticker = parsed.ticker;
+  const needsRedirect = raw.toUpperCase() !== symbol;
 
   const { data, isPending, error, refetch, isFetching } = useQuery({
-    queryKey: ["dashboard", ticker],
-    queryFn: ({ signal }) => fetchDashboard(ticker, signal),
+    queryKey: ["dashboard", symbol],
+    queryFn: ({ signal }) => fetchDashboard(symbol, signal),
     staleTime: 5 * 60_000,
     retry: false,
+    enabled: !needsRedirect,
   });
+
+  if (needsRedirect) {
+    return <Navigate to={`/dashboard/${symbol}`} replace />;
+  }
 
   return (
     <div className="dbg">
@@ -91,7 +101,7 @@ export default function Dashboard() {
         </main>
 
         <aside className="watchlist-panel">
-          <Watchlist activeTicker={ticker} />
+          <Watchlist activeSymbol={symbol} />
         </aside>
       </div>
     </div>
@@ -103,16 +113,22 @@ function TickerHero({ data }: { data: DashboardResponse }) {
   const sign = data.priceChangePct >= 0 ? "+" : "";
   const last = data.priceHistory[data.priceHistory.length - 1];
   const prev = data.priceHistory[data.priceHistory.length - 2];
+  const { currency } = data;
 
   return (
     <div className="card ticker-card" data-testid="ticker-hero">
       <div className="ticker-head">
         <span className="ticker-symbol">{data.ticker}</span>
+        <span className={`mkt-badge mkt-${marketBadge(data.exchange).toLowerCase()}`}>
+          {marketBadge(data.exchange)}
+        </span>
         <span className="ticker-sep">·</span>
         <span className="ticker-name">{data.name}</span>
       </div>
       <div className="ticker-pricing">
-        <span className="ticker-price">${data.currentPrice.toFixed(2)}</span>
+        <span className="ticker-price">
+          {formatPrice(data.currentPrice, currency)}
+        </span>
         <span className={`ticker-chg${positive ? "" : " down"}`}>
           <span className="arrow" />
           {sign}
@@ -123,7 +139,9 @@ function TickerHero({ data }: { data: DashboardResponse }) {
       <div className="ticker-meta">
         <div className="meta-cell">
           <div className="label">Open</div>
-          <div className="value">{last ? `$${last.open.toFixed(2)}` : "—"}</div>
+          <div className="value">
+            {last ? formatPrice(last.open, currency) : "—"}
+          </div>
         </div>
         <div className="meta-cell">
           <div className="label">Day range</div>
@@ -138,7 +156,7 @@ function TickerHero({ data }: { data: DashboardResponse }) {
         <div className="meta-cell">
           <div className="label">Prev close</div>
           <div className="value">
-            {prev ? `$${prev.close.toFixed(2)}` : "—"}
+            {prev ? formatPrice(prev.close, currency) : "—"}
           </div>
         </div>
       </div>

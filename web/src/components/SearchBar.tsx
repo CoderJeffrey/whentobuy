@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { searchSecurities } from "../lib/api";
+import { formatSymbol, marketBadge } from "../lib/symbol";
 import type { Security } from "../types";
 
 export function SearchBar() {
@@ -46,7 +47,7 @@ export function SearchBar() {
     setOpen(false);
     setQ("");
     setDebounced("");
-    navigate(`/dashboard/${sec.ticker}`);
+    navigate(`/dashboard/${formatSymbol(sec.ticker, sec.exchange)}`);
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -132,7 +133,7 @@ export function SearchBar() {
             const active = i === safeIdx;
             return (
               <button
-                key={sec.ticker}
+                key={formatSymbol(sec.ticker, sec.exchange)}
                 type="button"
                 onClick={() => pick(sec)}
                 onMouseEnter={() => setActiveIdx(i)}
@@ -143,6 +144,9 @@ export function SearchBar() {
               >
                 <span className="tk">{sec.ticker}</span>
                 <span className="nm">{sec.name}</span>
+                <span className={`mkt-badge mkt-${marketBadge(sec.exchange).toLowerCase()}`}>
+                  {marketBadge(sec.exchange)}
+                </span>
               </button>
             );
           })}

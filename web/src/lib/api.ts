@@ -47,11 +47,11 @@ async function fetchWithAuth(
 }
 
 export async function fetchDashboard(
-  ticker: string,
+  symbol: string,
   signal?: AbortSignal,
 ): Promise<DashboardResponse> {
   const res = await fetchWithAuth(
-    `/api/dashboard?ticker=${encodeURIComponent(ticker)}`,
+    `/api/dashboard?symbol=${encodeURIComponent(symbol)}`,
     { signal },
   );
   if (!res.ok) throw await readError(res);
