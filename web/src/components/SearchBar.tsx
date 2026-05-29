@@ -12,12 +12,17 @@ export function SearchBar() {
   const [open, setOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const [focused, setFocused] = useState(false);
+  // True while an IME (e.g. Chinese pinyin) is mid-composition. We hold off
+  // searching until the characters are committed so intermediate pinyin
+  // keystrokes don't fire noise queries.
+  const [composing, setComposing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (composing) return;
     const t = setTimeout(() => setDebounced(q.trim()), 150);
     return () => clearTimeout(t);
-  }, [q]);
+  }, [q, composing]);
 
   const searchQ = useQuery({
     queryKey: ["search", debounced],
@@ -51,6 +56,9 @@ export function SearchBar() {
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    // Ignore keys while an IME candidate is being composed (Enter then just
+    // confirms the candidate, it shouldn't select a search result).
+    if (e.nativeEvent.isComposing) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setActiveIdx((i) => Math.min(i + 1, results.length - 1));
@@ -93,6 +101,11 @@ export function SearchBar() {
           setFocused(true);
         }}
         onBlur={() => setFocused(false)}
+        onCompositionStart={() => setComposing(true)}
+        onCompositionEnd={(e) => {
+          setComposing(false);
+          setQ(e.currentTarget.value);
+        }}
         onKeyDown={onKeyDown}
         placeholder="Search stocks, indicators, combos…"
         data-testid="search-input"
