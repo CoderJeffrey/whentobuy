@@ -140,6 +140,7 @@ function AddPicker({ onPick, onCancel, disabled }: AddPickerProps) {
   const [q, setQ] = useState("");
   const [debounced, setDebounced] = useState("");
   const [activeIdx, setActiveIdx] = useState(0);
+  const [composing, setComposing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -147,9 +148,10 @@ function AddPicker({ onPick, onCancel, disabled }: AddPickerProps) {
   }, []);
 
   useEffect(() => {
+    if (composing) return;
     const t = setTimeout(() => setDebounced(q.trim()), 150);
     return () => clearTimeout(t);
-  }, [q]);
+  }, [q, composing]);
 
   const searchQ = useQuery({
     queryKey: ["search", debounced],
@@ -163,6 +165,7 @@ function AddPicker({ onPick, onCancel, disabled }: AddPickerProps) {
     results.length > 0 ? Math.min(activeIdx, results.length - 1) : 0;
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.nativeEvent.isComposing) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setActiveIdx((i) => Math.min(i + 1, results.length - 1));
@@ -190,8 +193,13 @@ function AddPicker({ onPick, onCancel, disabled }: AddPickerProps) {
             setQ(e.target.value);
             setActiveIdx(0);
           }}
+          onCompositionStart={() => setComposing(true)}
+          onCompositionEnd={(e) => {
+            setComposing(false);
+            setQ(e.currentTarget.value);
+          }}
           onKeyDown={onKeyDown}
-          placeholder="Add ticker…"
+          placeholder="Add ticker or 名称…"
           className="wl-picker-input"
           disabled={disabled}
           data-testid="watchlist-add-input"
