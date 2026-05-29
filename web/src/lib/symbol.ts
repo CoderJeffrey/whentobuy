@@ -13,7 +13,7 @@ export interface ParsedSymbol {
  * so bare/legacy tickers default to US. Mirrors the server's parseSymbol.
  */
 export function parseSymbol(input: string): ParsedSymbol {
-  const s = (input ?? "").trim().toUpperCase();
+  const s = String(input ?? "").trim().toUpperCase();
   let ticker = s;
   let exchange: Exchange = "US";
   const idx = s.lastIndexOf(".");
@@ -27,20 +27,23 @@ export function parseSymbol(input: string): ParsedSymbol {
   return { ticker, exchange };
 }
 
+// All helpers tolerate missing fields: stale persisted cache (or any pre-v21
+// API payload) can lack ticker/exchange/currency, and rendering must never
+// hard-crash on an undefined value. Default to the US/USD interpretation.
 export function formatSymbol(ticker: string, exchange: string): string {
-  return `${ticker.toUpperCase()}.${exchange.toUpperCase()}`;
+  return `${String(ticker ?? "").toUpperCase()}.${String(exchange ?? "US").toUpperCase()}`;
 }
 
 export function currencyFor(exchange: string): "USD" | "CNY" {
-  return exchange.toUpperCase() === "US" ? "USD" : "CNY";
+  return String(exchange ?? "US").toUpperCase() === "US" ? "USD" : "CNY";
 }
 
 export function formatPrice(value: number, currency: string): string {
   const symbol = currency === "CNY" ? "¥" : "$";
-  return `${symbol}${value.toFixed(2)}`;
+  return `${symbol}${Number(value ?? 0).toFixed(2)}`;
 }
 
 /** Short market badge shown next to a ticker: "US" or "CN". */
 export function marketBadge(exchange: string): "US" | "CN" {
-  return exchange.toUpperCase() === "US" ? "US" : "CN";
+  return String(exchange ?? "US").toUpperCase() === "US" ? "US" : "CN";
 }
