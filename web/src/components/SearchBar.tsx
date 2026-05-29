@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { searchSecurities } from "../lib/api";
 import { formatSymbol, marketBadge } from "../lib/symbol";
 import type { Security } from "../types";
 
 export function SearchBar() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [q, setQ] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -107,9 +109,9 @@ export function SearchBar() {
           setQ(e.currentTarget.value);
         }}
         onKeyDown={onKeyDown}
-        placeholder="Search stocks, indicators, combos…"
+        placeholder={t("search.placeholder")}
         data-testid="search-input"
-        aria-label="Search stocks"
+        aria-label={t("search.ariaLabel")}
         autoComplete="off"
         spellCheck={false}
       />
@@ -121,7 +123,7 @@ export function SearchBar() {
             setDebounced("");
             setOpen(false);
           }}
-          aria-label="Clear search"
+          aria-label={t("search.clear")}
           className="kbd"
           style={{ cursor: "pointer" }}
           data-testid="search-clear"
@@ -135,11 +137,11 @@ export function SearchBar() {
       {open && debounced && (
         <div className="search-dropdown" data-testid="search-dropdown">
           {searchQ.isFetching && results.length === 0 && (
-            <div className="search-empty">Searching…</div>
+            <div className="search-empty">{t("search.searching")}</div>
           )}
           {!searchQ.isFetching && results.length === 0 && (
             <div className="search-empty" data-testid="search-empty">
-              No matches.
+              {t("search.noMatches")}
             </div>
           )}
           {results.map((sec, i) => {

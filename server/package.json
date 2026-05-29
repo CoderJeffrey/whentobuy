@@ -12,6 +12,7 @@
     "fetch-ashares": "tsx scripts/fetch-ashares.ts",
     "newsletter": "tsx src/cron/newsletter.ts",
     "send-test-email": "tsx scripts/send-test-email.ts",
+    "check-translations": "tsx scripts/check-translations.ts",
     "test": "tsx --test src/**/*.test.ts",
     "typecheck": "tsc --noEmit"
   },

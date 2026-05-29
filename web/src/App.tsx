@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { AppLayout } from "./layouts/AppLayout";
 import Dashboard from "./pages/Dashboard";
@@ -16,6 +17,7 @@ function LegacyTickerRedirect() {
 }
 
 function FullPageLoader() {
+  const { t } = useTranslation();
   return (
     <div
       className="min-h-screen flex items-center justify-center"
@@ -25,7 +27,7 @@ function FullPageLoader() {
         className="text-sm"
         style={{ color: "var(--text-secondary)" }}
       >
-        Loading…
+        {t("app.loading")}
       </span>
     </div>
   );

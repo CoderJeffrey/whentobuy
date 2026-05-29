@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import type { ApiError } from "../types";
 
 export function TickerError({
@@ -10,18 +11,16 @@ export function TickerError({
   error: unknown;
   onRetry: () => void;
 }) {
+  const { t } = useTranslation();
   const apiErr = error as Partial<ApiError> | null;
   const code = apiErr?.code ?? "INTERNAL";
-  const message = apiErr?.message ?? "Unknown error";
+  const message = apiErr?.message ?? t("tickerError.unknownError");
 
   if (code === "TICKER_NOT_FOUND") {
     return (
       <Wrap testId="ticker-error-not-found" border="var(--negative)">
-        <Title>❌ Ticker Not Found</Title>
-        <Body>
-          <span className="font-mono">"{ticker}"</span> isn't a valid ticker, or
-          it may be delisted.
-        </Body>
+        <Title>{t("tickerError.notFoundTitle")}</Title>
+        <Body>{t("tickerError.notFoundBody", { ticker })}</Body>
         <Actions>
           <BackToAaplLink />
         </Actions>
@@ -32,10 +31,8 @@ export function TickerError({
   if (code === "RATE_LIMITED") {
     return (
       <Wrap testId="ticker-error-rate-limit" border="var(--rating-hold)">
-        <Title>⏸ Yahoo Rate Limit Hit</Title>
-        <Body>
-          We're being throttled by Yahoo Finance. Try again in a minute.
-        </Body>
+        <Title>{t("tickerError.rateLimitTitle")}</Title>
+        <Body>{t("tickerError.rateLimitBody")}</Body>
         <Actions>
           <RetryButton onClick={onRetry} />
           <BackToAaplLink />
@@ -46,9 +43,9 @@ export function TickerError({
 
   return (
     <Wrap testId="ticker-error-network" border="var(--negative)">
-      <Title>⚠ Something Went Wrong</Title>
+      <Title>{t("tickerError.genericTitle")}</Title>
       <Body>
-        Couldn't load data for {ticker}.
+        {t("tickerError.genericBody", { ticker })}
         <div
           className="mt-2 text-xs font-mono break-words"
           style={{ color: "var(--text-muted)" }}
@@ -114,6 +111,7 @@ function Actions({ children }: { children: React.ReactNode }) {
 }
 
 function RetryButton({ onClick }: { onClick: () => void }) {
+  const { t } = useTranslation();
   return (
     <button
       type="button"
@@ -126,12 +124,13 @@ function RetryButton({ onClick }: { onClick: () => void }) {
       }}
       data-testid="ticker-error-retry"
     >
-      Retry
+      {t("common.retry")}
     </button>
   );
 }
 
 function BackToAaplLink() {
+  const { t } = useTranslation();
   return (
     <Link
       to="/ticker/AAPL"
@@ -143,7 +142,7 @@ function BackToAaplLink() {
       }}
       data-testid="ticker-error-back"
     >
-      Back to AAPL
+      {t("tickerError.backToAapl")}
     </Link>
   );
 }

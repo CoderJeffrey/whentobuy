@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useWatchlist } from "../hooks/useWatchlist";
 import { searchSecurities } from "../lib/api";
 import { formatSymbol, marketBadge } from "../lib/symbol";
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function Watchlist({ activeSymbol }: Props) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { query, add, remove } = useWatchlist();
   const [addOpen, setAddOpen] = useState(false);
@@ -35,22 +37,22 @@ export function Watchlist({ activeSymbol }: Props) {
 
   function handleAdd(symbol: string) {
     const sym = symbol.toUpperCase();
-    if (tickers.some((t) => t.symbol === sym)) {
-      flashNotice(`${sym} is already in your watchlist`);
+    if (tickers.some((item) => item.symbol === sym)) {
+      flashNotice(t("watchlist.alreadyAdded", { symbol: sym }));
       setAddOpen(false);
       return;
     }
     add.mutate(sym, {
       onSuccess: (data) => {
         if (data.added) {
-          flashNotice(`${sym} added to watchlist`);
+          flashNotice(t("watchlist.added", { symbol: sym }));
         } else {
-          flashNotice(`${sym} is already in your watchlist`);
+          flashNotice(t("watchlist.alreadyAdded", { symbol: sym }));
         }
         setAddOpen(false);
       },
       onError: (err) => {
-        flashNotice(err instanceof Error ? err.message : "Failed to add");
+        flashNotice(err instanceof Error ? err.message : t("common.failedToAdd"));
       },
     });
   }
@@ -59,14 +61,14 @@ export function Watchlist({ activeSymbol }: Props) {
     const wasActive = symbol === activeSymbol;
     remove.mutate(symbol, {
       onSuccess: (data) => {
-        flashNotice(`${symbol} removed`);
+        flashNotice(t("watchlist.removed", { symbol }));
         if (wasActive) {
           const next = data.tickers[0]?.symbol ?? "AAPL.US";
           navigate(`/dashboard/${next}`);
         }
       },
       onError: (err) => {
-        flashNotice(err instanceof Error ? err.message : "Failed to remove");
+        flashNotice(err instanceof Error ? err.message : t("common.failedToRemove"));
       },
     });
   }
@@ -74,16 +76,16 @@ export function Watchlist({ activeSymbol }: Props) {
   return (
     <div aria-label="Watchlist" data-testid="watchlist">
       <div className="wl-head">
-        <span className="title">Watchlist</span>
+        <span className="title">{t("watchlist.title")}</span>
         {tickers.length > 0 && (
-          <span className="count">{tickers.length} / 50</span>
+          <span className="count">{t("watchlist.count", { count: tickers.length })}</span>
         )}
       </div>
 
-      {query.isPending && <div className="wl-hint">Loading watchlist…</div>}
+      {query.isPending && <div className="wl-hint">{t("watchlist.loading")}</div>}
 
       {query.error && (
-        <div className="wl-error">Failed to load watchlist</div>
+        <div className="wl-error">{t("watchlist.loadFailed")}</div>
       )}
 
       <div className="wl-list">
@@ -100,7 +102,7 @@ export function Watchlist({ activeSymbol }: Props) {
 
       {!query.isPending && tickers.length === 0 && (
         <div className="wl-add" style={{ cursor: "default" }}>
-          No tickers yet
+          {t("watchlist.empty")}
         </div>
       )}
 
@@ -117,7 +119,7 @@ export function Watchlist({ activeSymbol }: Props) {
           className="wl-add"
           data-testid="watchlist-add-open"
         >
-          + Add to watchlist
+          {t("watchlist.add")}
         </button>
       )}
 
@@ -137,6 +139,7 @@ interface AddPickerProps {
 }
 
 function AddPicker({ onPick, onCancel, disabled }: AddPickerProps) {
+  const { t } = useTranslation();
   const [q, setQ] = useState("");
   const [debounced, setDebounced] = useState("");
   const [activeIdx, setActiveIdx] = useState(0);
@@ -199,7 +202,7 @@ function AddPicker({ onPick, onCancel, disabled }: AddPickerProps) {
             setQ(e.currentTarget.value);
           }}
           onKeyDown={onKeyDown}
-          placeholder="Add ticker or 名称…"
+          placeholder={t("watchlist.addPlaceholder")}
           className="wl-picker-input"
           disabled={disabled}
           data-testid="watchlist-add-input"
@@ -209,7 +212,7 @@ function AddPicker({ onPick, onCancel, disabled }: AddPickerProps) {
         <button
           type="button"
           onClick={onCancel}
-          aria-label="Cancel add"
+          aria-label={t("watchlist.cancelAdd")}
           className="wl-remove"
         >
           ✕
@@ -219,10 +222,10 @@ function AddPicker({ onPick, onCancel, disabled }: AddPickerProps) {
       {debounced && (
         <div className="wl-picker-results">
           {searchQ.isFetching && results.length === 0 && (
-            <div className="wl-hint">Searching…</div>
+            <div className="wl-hint">{t("watchlist.searching")}</div>
           )}
           {!searchQ.isFetching && results.length === 0 && (
-            <div className="wl-hint">No matches.</div>
+            <div className="wl-hint">{t("watchlist.noMatches")}</div>
           )}
           {results.map((sec, i) => {
             const active = i === safeIdx;

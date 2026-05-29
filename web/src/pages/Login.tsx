@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { Trans, useTranslation } from "react-i18next";
 import { useAuth } from "../contexts/AuthContext";
 import "./Login.css";
 
 export default function Login() {
+  const { t } = useTranslation();
   const { signInWithGoogle, signInAsDevUser, devBypassAvailable } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -14,7 +16,7 @@ export default function Login() {
     try {
       await signInWithGoogle();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Sign-in failed");
+      setErr(e instanceof Error ? e.message : t("login.signInFailed"));
       setSubmitting(false);
     }
   }
@@ -33,7 +35,7 @@ export default function Login() {
           </Link>
           <div />
           <Link to="/" className="nav-back">
-            <span className="arrow">←</span> <span>Back to home</span>
+            <span className="arrow">←</span> <span>{t("login.backToHome")}</span>
           </Link>
         </div>
       </nav>
@@ -43,19 +45,14 @@ export default function Login() {
           <div className="auth-card">
             <span className="auth-eyebrow">
               <span className="pulse" />
-              SIGN IN · INDICATORHUB
+              {t("login.eyebrow")}
             </span>
 
-            <h1 className="auth-title">
-              Welcome <em>back</em>.
-            </h1>
-            <p className="auth-sub">
-              Sign in to access your dashboards, watchlists, and indicator
-              settings.
-            </p>
+            <h1 className="auth-title">{t("login.title")}</h1>
+            <p className="auth-sub">{t("login.subtitle")}</p>
 
             <div className="auth-tag">
-              CONTINUE WITH <span className="line" />
+              {t("login.continueWith")} <span className="line" />
             </div>
 
             <button
@@ -82,19 +79,19 @@ export default function Login() {
                   d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"
                 />
               </svg>
-              {submitting ? "Redirecting…" : "Continue with Google"}
+              {submitting ? t("login.redirecting") : t("login.continueWithGoogle")}
             </button>
 
             {devBypassAvailable ? (
               <>
-                <div className="or-divider">or</div>
+                <div className="or-divider">{t("login.or")}</div>
                 <button
                   className="oauth-btn ghost"
                   type="button"
                   onClick={signInAsDevUser}
                   data-testid="login-dev-bypass"
                 >
-                  Use dev account
+                  {t("login.useDevAccount")}
                 </button>
               </>
             ) : null}
@@ -106,8 +103,13 @@ export default function Login() {
             ) : null}
 
             <div className="auth-foot">
-              By continuing you agree to our <a href="#">Terms</a> and{" "}
-              <a href="#">Privacy</a>.
+              <Trans
+                i18nKey="login.agreement"
+                components={{
+                  terms: <a href="#" />,
+                  privacy: <a href="#" />,
+                }}
+              />
             </div>
           </div>
 

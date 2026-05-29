@@ -1,13 +1,22 @@
 import { getSupabaseAdmin } from "../supabase.js";
 
+export type Language = "en" | "zh";
+
 export interface UserPreferences {
   userId: string;
   newsletterEnabled: boolean;
   unsubscribeToken: string;
   timeZone: string;
+  language: Language;
 }
 
 const DEFAULT_TIME_ZONE = "America/New_York";
+const DEFAULT_LANGUAGE: Language = "en";
+
+/** Validate a supported UI language code. */
+export function isValidLanguage(lang: unknown): lang is Language {
+  return lang === "en" || lang === "zh";
+}
 
 /** Validate an IANA time-zone identifier (e.g. "America/New_York"). */
 export function isValidTimeZone(tz: string): boolean {
@@ -32,10 +41,11 @@ interface PreferencesRow {
   newsletter_enabled: boolean;
   unsubscribe_token: string;
   time_zone: string | null;
+  language: string | null;
 }
 
 const SELECT_COLS =
-  "user_id, newsletter_enabled, unsubscribe_token, time_zone";
+  "user_id, newsletter_enabled, unsubscribe_token, time_zone, language";
 
 function fromRow(row: PreferencesRow): UserPreferences {
   return {
@@ -43,6 +53,7 @@ function fromRow(row: PreferencesRow): UserPreferences {
     newsletterEnabled: row.newsletter_enabled,
     unsubscribeToken: row.unsubscribe_token,
     timeZone: row.time_zone ?? DEFAULT_TIME_ZONE,
+    language: isValidLanguage(row.language) ? row.language : DEFAULT_LANGUAGE,
   };
 }
 
@@ -111,6 +122,28 @@ export async function setTimeZone(
   if (error) {
     throw new PreferencesError(
       `failed to update time zone: ${error.message}`,
+    );
+  }
+  return fromRow(data as PreferencesRow);
+}
+
+export async function setLanguage(
+  userId: string,
+  language: Language,
+): Promise<UserPreferences> {
+  if (!isValidLanguage(language)) {
+    throw new PreferencesError(`invalid language: ${language}`);
+  }
+  await getPreferences(userId);
+  const { data, error } = await getSupabaseAdmin()
+    .from("user_preferences")
+    .update({ language, updated_at: new Date().toISOString() })
+    .eq("user_id", userId)
+    .select(SELECT_COLS)
+    .single();
+  if (error) {
+    throw new PreferencesError(
+      `failed to update language: ${error.message}`,
     );
   }
   return fromRow(data as PreferencesRow);

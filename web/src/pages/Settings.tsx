@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LogOut } from "lucide-react";
+import { Trans, useTranslation } from "react-i18next";
 import { useAuth } from "../contexts/AuthContext";
 import {
   deleteAccount,
@@ -9,6 +10,8 @@ import {
   type UserPreferences,
 } from "../lib/api";
 import "./Settings.css";
+
+type Language = "en" | "zh";
 
 type ToastKind = "success" | "error";
 interface Toast {
@@ -72,8 +75,14 @@ function supportedZones(): string[] {
 }
 
 export default function Settings() {
+  const { t, i18n } = useTranslation();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+
+  // i18next may carry a regional code (e.g. "zh-CN"); collapse to en/zh.
+  const currentLanguage: Language = i18n.language?.startsWith("zh")
+    ? "zh"
+    : "en";
 
   const [prefs, setPrefs] = useState<UserPreferences | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -82,6 +91,7 @@ export default function Settings() {
   const [savingNewsletter, setSavingNewsletter] = useState(false);
   const [savingTz, setSavingTz] = useState(false);
   const [editingTz, setEditingTz] = useState(false);
+  const [savingLanguage, setSavingLanguage] = useState(false);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -103,12 +113,12 @@ export default function Settings() {
       })
       .catch((err) => {
         if (active)
-          setLoadError(err instanceof Error ? err.message : "Failed to load");
+          setLoadError(err instanceof Error ? err.message : t("common.failedToLoad"));
       });
     return () => {
       active = false;
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!toast) return;
@@ -129,14 +139,14 @@ export default function Settings() {
       setPrefs(result);
       setToast({
         message: result.newsletter_enabled
-          ? "Daily emails enabled"
-          : "Daily emails turned off",
+          ? t("settings.notifications.enabled")
+          : t("settings.notifications.disabled"),
         kind: "success",
       });
     } catch (err) {
       setPrefs(prev);
       setToast({
-        message: err instanceof Error ? err.message : "Failed to save",
+        message: err instanceof Error ? err.message : t("common.failedToSave"),
         kind: "error",
       });
     } finally {
@@ -156,15 +166,34 @@ export default function Settings() {
     try {
       const result = await savePreferences({ time_zone: tz });
       setPrefs(result);
-      setToast({ message: `Time zone set to ${tz}`, kind: "success" });
+      setToast({ message: t("settings.account.timeZoneSet", { tz }), kind: "success" });
     } catch (err) {
       setPrefs(prev);
       setToast({
-        message: err instanceof Error ? err.message : "Failed to save",
+        message: err instanceof Error ? err.message : t("common.failedToSave"),
         kind: "error",
       });
     } finally {
       setSavingTz(false);
+    }
+  }
+
+  async function changeLanguage(lng: Language) {
+    if (savingLanguage || lng === currentLanguage) return;
+    // Update the UI immediately; i18next persists the choice to localStorage.
+    void i18n.changeLanguage(lng);
+    setSavingLanguage(true);
+    try {
+      const result = await savePreferences({ language: lng });
+      setPrefs(result);
+      setToast({ message: t("common.saved"), kind: "success" });
+    } catch (err) {
+      setToast({
+        message: err instanceof Error ? err.message : t("common.failedToSave"),
+        kind: "error",
+      });
+    } finally {
+      setSavingLanguage(false);
     }
   }
 
@@ -179,7 +208,7 @@ export default function Settings() {
       setConfirmDelete(false);
       setDeleting(false);
       setToast({
-        message: err instanceof Error ? err.message : "Failed to delete account",
+        message: err instanceof Error ? err.message : t("settings.danger.failedToDelete"),
         kind: "error",
       });
     }
@@ -191,20 +220,20 @@ export default function Settings() {
 
       <main className="main">
         <header className="page-head">
-          <h1 className="page-title">Settings</h1>
-          <p className="page-sub">Manage your account and notifications.</p>
+          <h1 className="page-title">{t("settings.title")}</h1>
+          <p className="page-sub">{t("settings.subtitle")}</p>
         </header>
 
         {/* Notifications */}
         <section className="card">
           <div className="card-head">
-            <span className="card-title">Notifications</span>
+            <span className="card-title">{t("settings.notifications.title")}</span>
           </div>
           <div className="row">
             <div className="row-body">
-              <div className="row-label">Daily watchlist email</div>
+              <div className="row-label">{t("settings.notifications.dailyEmail")}</div>
               <div className="row-desc">
-                Get a digest of your watchlist scores every day at 8&nbsp;PM&nbsp;ET.
+                {t("settings.notifications.description")}
               </div>
               {loadError && <div className="row-error">{loadError}</div>}
             </div>
@@ -216,7 +245,7 @@ export default function Settings() {
                   type="button"
                   role="switch"
                   aria-checked={newsletterOn}
-                  aria-label="Toggle daily watchlist email"
+                  aria-label={t("settings.notifications.toggleLabel")}
                   disabled={savingNewsletter}
                   className={`toggle${newsletterOn ? " on" : ""}`}
                   onClick={() => void toggleNewsletter()}
@@ -226,16 +255,49 @@ export default function Settings() {
           </div>
         </section>
 
+        {/* Language */}
+        <section className="card">
+          <div className="card-head">
+            <span className="card-title">{t("settings.language.title")}</span>
+          </div>
+          <div className="row">
+            <div className="row-body lang-options" role="radiogroup" aria-label={t("settings.language.title")}>
+              <label className="lang-option">
+                <input
+                  type="radio"
+                  name="language"
+                  value="en"
+                  checked={currentLanguage === "en"}
+                  disabled={savingLanguage}
+                  onChange={() => void changeLanguage("en")}
+                />
+                <span>{t("settings.language.english")}</span>
+              </label>
+              <label className="lang-option">
+                <input
+                  type="radio"
+                  name="language"
+                  value="zh"
+                  checked={currentLanguage === "zh"}
+                  disabled={savingLanguage}
+                  onChange={() => void changeLanguage("zh")}
+                />
+                <span>{t("settings.language.chinese")}</span>
+              </label>
+            </div>
+          </div>
+        </section>
+
         {/* Account */}
         <section className="card">
           <div className="card-head">
-            <span className="card-title">Account</span>
+            <span className="card-title">{t("settings.account.title")}</span>
           </div>
 
           <div className="row">
             <div className="row-body">
               <div className="field-static">
-                <span className="lbl">Email</span>
+                <span className="lbl">{t("settings.account.email")}</span>
                 <span className="val">{user?.email ?? "—"}</span>
               </div>
             </div>
@@ -246,7 +308,7 @@ export default function Settings() {
                 onClick={() => void signOut()}
               >
                 <LogOut strokeWidth={1.8} />
-                Sign out
+                {t("common.signOut")}
               </button>
             </div>
           </div>
@@ -254,7 +316,7 @@ export default function Settings() {
           <div className="row">
             <div className="row-body">
               <div className="field-static">
-                <span className="lbl">Time zone</span>
+                <span className="lbl">{t("settings.account.timeZone")}</span>
                 <span className="val">
                   {prefs ? zoneLabel(prefs.time_zone) : "—"}
                 </span>
@@ -281,7 +343,7 @@ export default function Settings() {
                     className="tz-cancel"
                     onClick={() => setEditingTz(false)}
                   >
-                    Cancel
+                    {t("common.cancel")}
                   </button>
                 </div>
               ) : (
@@ -291,7 +353,7 @@ export default function Settings() {
                   disabled={!prefs || savingTz}
                   onClick={() => setEditingTz(true)}
                 >
-                  CHANGE
+                  {t("settings.account.change")}
                 </button>
               )}
             </div>
@@ -301,14 +363,13 @@ export default function Settings() {
         {/* Danger zone */}
         <section className="card danger-card">
           <div className="card-head">
-            <span className="card-title">Danger zone</span>
+            <span className="card-title">{t("settings.danger.title")}</span>
           </div>
           <div className="row">
             <div className="row-body">
-              <div className="row-label">Delete account</div>
+              <div className="row-label">{t("settings.danger.deleteAccount")}</div>
               <div className="row-desc">
-                Permanently remove your account, watchlists, and alert rules.
-                This cannot be undone.
+                {t("settings.danger.deleteDescription")}
               </div>
             </div>
             <div className="row-control">
@@ -317,7 +378,7 @@ export default function Settings() {
                 className="btn btn-danger"
                 onClick={() => setConfirmDelete(true)}
               >
-                DELETE ACCOUNT
+                {t("settings.danger.deleteButton")}
               </button>
             </div>
           </div>
@@ -329,15 +390,17 @@ export default function Settings() {
           className="modal-scrim"
           role="dialog"
           aria-modal="true"
-          aria-label="Confirm account deletion"
+          aria-label={t("settings.danger.confirmTitle")}
           onClick={() => !deleting && setConfirmDelete(false)}
         >
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2 className="modal-title">Delete your account?</h2>
+            <h2 className="modal-title">{t("settings.danger.confirmTitle")}</h2>
             <p className="modal-text">
-              This permanently removes <strong>{user?.email ?? "your account"}</strong>{" "}
-              along with your watchlists, combos, and alert rules. This action
-              cannot be undone.
+              <Trans
+                i18nKey="settings.danger.confirmText"
+                values={{ email: user?.email ?? t("settings.yourAccount") }}
+                components={{ strong: <strong /> }}
+              />
             </p>
             <div className="modal-actions">
               <button
@@ -346,7 +409,7 @@ export default function Settings() {
                 disabled={deleting}
                 onClick={() => setConfirmDelete(false)}
               >
-                Cancel
+                {t("common.cancel")}
               </button>
               <button
                 type="button"
@@ -354,7 +417,7 @@ export default function Settings() {
                 disabled={deleting}
                 onClick={() => void handleDelete()}
               >
-                {deleting ? "DELETING…" : "DELETE ACCOUNT"}
+                {deleting ? t("settings.danger.deleting") : t("settings.danger.deleteButton")}
               </button>
             </div>
           </div>

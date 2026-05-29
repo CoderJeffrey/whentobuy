@@ -15,7 +15,7 @@ export function SidebarItem({ to, label, icon: Icon, end }: Props) {
       end={end}
       title={label}
       data-testid="sidebar-item"
-      data-nav={label.toLowerCase()}
+      data-nav={to.replace(/^\//, "").toLowerCase()}
       className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}
     >
       <Icon size={18} strokeWidth={1.75} />
