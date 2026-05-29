@@ -9,6 +9,7 @@
     "backfill": "tsx scripts/backfill.ts",
     "refresh-prices": "tsx scripts/refresh-prices.ts",
     "fetch-sec-tickers": "tsx scripts/fetch-sec-tickers.ts",
+    "fetch-ashares": "tsx scripts/fetch-ashares.ts",
     "newsletter": "tsx src/cron/newsletter.ts",
     "send-test-email": "tsx scripts/send-test-email.ts",
     "test": "tsx --test src/**/*.test.ts",

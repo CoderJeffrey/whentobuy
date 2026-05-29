@@ -48,6 +48,7 @@ import {
   getSecurity,
   searchSecurities,
 } from "./services/securities.js";
+import { currencyFor, formatSymbol, parseSymbol } from "./lib/symbol.js";
 import type {
   DashboardResponse,
   PriceBar,
@@ -94,34 +95,26 @@ function sqlLit(s: string): string {
   return `'${s.replace(/'/g, "''")}'`;
 }
 
-function sanitizeTicker(input: unknown): string {
-  if (typeof input !== "string") {
-    throw new TickerNotFoundError(String(input));
-  }
-  const s = input.trim().toUpperCase();
-  if (!s || !/^[A-Z][A-Z0-9.\-]{0,9}$/.test(s)) {
-    throw new TickerNotFoundError(s);
-  }
-  return s;
-}
-
 async function buildDashboard(
   userId: string,
-  ticker: string,
+  symbolInput: string,
 ): Promise<DashboardResponse> {
-  const sym = sanitizeTicker(ticker);
-  await ensureTickerData(sym);
+  const parsed = parseSymbol(symbolInput);
+  if (!parsed) throw new TickerNotFoundError(String(symbolInput));
+  const { ticker, exchange } = parsed;
+  const symbol = formatSymbol(ticker, exchange);
+  await ensureTickerData(ticker, exchange);
 
   const db = await getDb();
-  const security = await getSecurity(sym);
+  const security = await getSecurity(ticker, exchange);
 
   const priceReader = await db.runAndReadAll(
-    `SELECT date, open, high, low, close, adj_close, volume FROM prices WHERE ticker = ${sqlLit(sym)} ORDER BY date ASC`,
+    `SELECT date, open, high, low, close, adj_close, volume FROM prices WHERE ticker = ${sqlLit(ticker)} AND exchange = ${sqlLit(exchange)} ORDER BY date ASC`,
   );
   const priceRows = priceReader.getRowObjectsJS();
 
   if (priceRows.length === 0) {
-    throw new TickerNotFoundError(sym);
+    throw new TickerNotFoundError(ticker);
   }
 
   const priceHistory: PriceBar[] = priceRows.map((r) => ({
@@ -160,8 +153,12 @@ async function buildDashboard(
   const anyGreen = comboStatuses.some((c) => c.green);
 
   return {
-    ticker: sym,
-    name: security?.name ?? sym,
+    ticker,
+    exchange,
+    symbol,
+    market: security?.market ?? (exchange === "US" ? "us" : "china"),
+    currency: currencyFor(exchange),
+    name: security?.name ?? ticker,
     asOf: latest.date,
     currentPrice: latest.close,
     priceChange: Number(priceChange.toFixed(2)),
@@ -173,10 +170,13 @@ async function buildDashboard(
   };
 }
 
-async function isTickerDataReady(ticker: string): Promise<boolean> {
+async function isTickerDataReady(
+  ticker: string,
+  exchange: string,
+): Promise<boolean> {
   const db = await getDb();
   const reader = await db.runAndReadAll(
-    `SELECT status FROM ticker_cache WHERE ticker = ${sqlLit(ticker)}`,
+    `SELECT status FROM ticker_cache WHERE ticker = ${sqlLit(ticker)} AND exchange = ${sqlLit(exchange)}`,
   );
   const rows = reader.getRowObjectsJS();
   return rows.length > 0 && rows[0]!.status === "ok";
@@ -184,26 +184,34 @@ async function isTickerDataReady(ticker: string): Promise<boolean> {
 
 async function getWatchlistDisplayItem(
   userId: string,
-  ticker: string,
+  symbolInput: string,
   totalCombos: number,
   combosForUser: Awaited<ReturnType<typeof listCombos>>,
 ): Promise<WatchlistDisplayItem> {
-  const security = await getSecurity(ticker);
+  const parsed = parseSymbol(symbolInput);
+  const ticker = parsed?.ticker ?? symbolInput.toUpperCase();
+  const exchange = parsed?.exchange ?? "US";
+  const symbol = formatSymbol(ticker, exchange);
+  const currency = currencyFor(exchange);
+  const security = await getSecurity(ticker, exchange);
   const name = security?.name ?? ticker;
-  const ready = await isTickerDataReady(ticker);
+  const market = security?.market ?? (exchange === "US" ? "us" : "china");
+  const base = { symbol, ticker, exchange, market, currency, name };
+
+  const ready = await isTickerDataReady(ticker, exchange);
   if (!ready) {
-    return { ticker, name, dataReady: false, totalCombos };
+    return { ...base, dataReady: false, totalCombos };
   }
 
   const db = await getDb();
   const priceReader = await db.runAndReadAll(
     `SELECT date, open, high, low, close, volume FROM prices
-     WHERE ticker = ${sqlLit(ticker)}
+     WHERE ticker = ${sqlLit(ticker)} AND exchange = ${sqlLit(exchange)}
      ORDER BY date ASC`,
   );
   const priceRows = priceReader.getRowObjectsJS();
   if (priceRows.length === 0) {
-    return { ticker, name, dataReady: false, totalCombos };
+    return { ...base, dataReady: false, totalCombos };
   }
 
   const prices: PriceRow[] = priceRows.map((r) => ({
@@ -225,8 +233,7 @@ async function getWatchlistDisplayItem(
   const greenComboCount = statuses.filter((s) => s.green).length;
 
   return {
-    ticker,
-    name,
+    ...base,
     dataReady: true,
     currentPrice: Number(latest.close.toFixed(2)),
     priceChangePct: Number(priceChangePct.toFixed(2)),
@@ -235,9 +242,11 @@ async function getWatchlistDisplayItem(
   };
 }
 
-function kickBackfill(ticker: string): void {
-  ensureTickerData(ticker).catch((err) => {
-    console.warn(`[watchlist] backfill ${ticker} failed:`, err);
+function kickBackfill(symbolInput: string): void {
+  const parsed = parseSymbol(symbolInput);
+  if (!parsed) return;
+  ensureTickerData(parsed.ticker, parsed.exchange).catch((err) => {
+    console.warn(`[watchlist] backfill ${symbolInput} failed:`, err);
   });
 }
 
@@ -340,10 +349,14 @@ app.get("/api/me", (req: AuthedRequest, res) => {
 });
 
 app.get("/api/dashboard", async (req: AuthedRequest, res) => {
-  const tickerParam =
-    typeof req.query.ticker === "string" ? req.query.ticker : "AAPL";
+  const symbolParam =
+    typeof req.query.symbol === "string"
+      ? req.query.symbol
+      : typeof req.query.ticker === "string"
+        ? req.query.ticker
+        : "AAPL.US";
   try {
-    const payload = await buildDashboard(req.user!.id, tickerParam);
+    const payload = await buildDashboard(req.user!.id, symbolParam);
     res.json(payload);
   } catch (err) {
     if (
@@ -375,7 +388,12 @@ app.get("/api/search", async (req, res) => {
 
 app.get("/api/securities/:ticker", async (req, res) => {
   try {
-    const sec = await getSecurity(req.params.ticker);
+    const parsed = parseSymbol(req.params.ticker);
+    if (!parsed) {
+      res.status(404).json({ error: "not found" });
+      return;
+    }
+    const sec = await getSecurity(parsed.ticker, parsed.exchange);
     if (!sec) {
       res.status(404).json({ error: "not found" });
       return;
@@ -566,8 +584,12 @@ app.post("/api/watchlist", async (req: AuthedRequest, res) => {
   try {
     const userId = req.user!.id;
     const raw = (req.body as { ticker?: unknown })?.ticker;
-    const sym = sanitizeTicker(raw);
-    const security = await getSecurity(sym);
+    const parsed = parseSymbol(raw);
+    if (!parsed) {
+      throw new TickerNotFoundError(String(raw));
+    }
+    const sym = formatSymbol(parsed.ticker, parsed.exchange);
+    const security = await getSecurity(parsed.ticker, parsed.exchange);
     if (!security) {
       res
         .status(404)
@@ -607,7 +629,11 @@ app.post("/api/watchlist", async (req: AuthedRequest, res) => {
 app.delete("/api/watchlist/:ticker", async (req: AuthedRequest, res) => {
   try {
     const userId = req.user!.id;
-    const sym = sanitizeTicker(req.params.ticker);
+    const parsed = parseSymbol(req.params.ticker);
+    if (!parsed) {
+      throw new TickerNotFoundError(String(req.params.ticker));
+    }
+    const sym = formatSymbol(parsed.ticker, parsed.exchange);
     const result = await removeFromWatchlist(userId, sym);
     const combosForUser = await listCombos(userId);
     const totalCombos = combosForUser.length;

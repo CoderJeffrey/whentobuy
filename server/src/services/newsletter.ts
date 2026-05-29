@@ -54,7 +54,14 @@ export async function buildEmailTickerData(
     limited.map((t) =>
       getTickerSummary(userId, t).catch((err) => {
         console.warn(`[newsletter] summary failed for ${t}:`, err);
-        return { ticker: t, name: t, dataReady: false as const };
+        return {
+          symbol: t,
+          ticker: t,
+          exchange: "US",
+          currency: "USD",
+          name: t,
+          dataReady: false as const,
+        };
       }),
     ),
   );
@@ -68,7 +75,9 @@ export async function buildEmailTickerData(
       s.combos != null
     ) {
       return {
+        symbol: s.symbol,
         ticker: s.ticker,
+        currency: s.currency,
         name: s.name,
         dataReady: true,
         currentPrice: s.currentPrice,
@@ -80,7 +89,13 @@ export async function buildEmailTickerData(
         totalCombos: s.totalCombos ?? s.combos.length,
       };
     }
-    return { ticker: s.ticker, name: s.name, dataReady: false };
+    return {
+      symbol: s.symbol,
+      ticker: s.ticker,
+      currency: s.currency,
+      name: s.name,
+      dataReady: false,
+    };
   });
 
   return { tickers, watchlistTotal: watchlist.length };

@@ -3,14 +3,15 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useWatchlist } from "../hooks/useWatchlist";
 import { searchSecurities } from "../lib/api";
+import { formatSymbol, marketBadge } from "../lib/symbol";
 import type { Security } from "../types";
 import { WatchlistItem } from "./WatchlistItem";
 
 interface Props {
-  activeTicker: string;
+  activeSymbol: string;
 }
 
-export function Watchlist({ activeTicker }: Props) {
+export function Watchlist({ activeSymbol }: Props) {
   const navigate = useNavigate();
   const { query, add, remove } = useWatchlist();
   const [addOpen, setAddOpen] = useState(false);
@@ -32,9 +33,9 @@ export function Watchlist({ activeTicker }: Props) {
 
   const tickers = query.data?.tickers ?? [];
 
-  function handleAdd(ticker: string) {
-    const sym = ticker.toUpperCase();
-    if (tickers.some((t) => t.ticker === sym)) {
+  function handleAdd(symbol: string) {
+    const sym = symbol.toUpperCase();
+    if (tickers.some((t) => t.symbol === sym)) {
       flashNotice(`${sym} is already in your watchlist`);
       setAddOpen(false);
       return;
@@ -54,13 +55,13 @@ export function Watchlist({ activeTicker }: Props) {
     });
   }
 
-  function handleRemove(ticker: string) {
-    const wasActive = ticker === activeTicker;
-    remove.mutate(ticker, {
+  function handleRemove(symbol: string) {
+    const wasActive = symbol === activeSymbol;
+    remove.mutate(symbol, {
       onSuccess: (data) => {
-        flashNotice(`${ticker} removed`);
+        flashNotice(`${symbol} removed`);
         if (wasActive) {
-          const next = data.tickers[0]?.ticker ?? "AAPL";
+          const next = data.tickers[0]?.symbol ?? "AAPL.US";
           navigate(`/dashboard/${next}`);
         }
       },
@@ -88,11 +89,11 @@ export function Watchlist({ activeTicker }: Props) {
       <div className="wl-list">
         {tickers.map((item) => (
           <WatchlistItem
-            key={item.ticker}
+            key={item.symbol}
             item={item}
-            active={item.ticker === activeTicker}
+            active={item.symbol === activeSymbol}
             onRemove={handleRemove}
-            removing={remove.isPending && remove.variables === item.ticker}
+            removing={remove.isPending && remove.variables === item.symbol}
           />
         ))}
       </div>
@@ -171,7 +172,7 @@ function AddPicker({ onPick, onCancel, disabled }: AddPickerProps) {
     } else if (e.key === "Enter") {
       e.preventDefault();
       const sec = results[safeIdx];
-      if (sec) onPick(sec.ticker);
+      if (sec) onPick(formatSymbol(sec.ticker, sec.exchange));
     } else if (e.key === "Escape") {
       e.preventDefault();
       onCancel();
@@ -219,10 +220,10 @@ function AddPicker({ onPick, onCancel, disabled }: AddPickerProps) {
             const active = i === safeIdx;
             return (
               <button
-                key={sec.ticker}
+                key={formatSymbol(sec.ticker, sec.exchange)}
                 type="button"
                 onMouseEnter={() => setActiveIdx(i)}
-                onClick={() => onPick(sec.ticker)}
+                onClick={() => onPick(formatSymbol(sec.ticker, sec.exchange))}
                 disabled={disabled}
                 className={`wl-picker-result${active ? " active" : ""}`}
                 data-testid="watchlist-add-result"
@@ -230,6 +231,9 @@ function AddPicker({ onPick, onCancel, disabled }: AddPickerProps) {
               >
                 <span className="tk">{sec.ticker}</span>
                 <span className="nm">{sec.name}</span>
+                <span className={`mkt-badge mkt-${marketBadge(sec.exchange).toLowerCase()}`}>
+                  {marketBadge(sec.exchange)}
+                </span>
               </button>
             );
           })}

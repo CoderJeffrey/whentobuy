@@ -1,12 +1,19 @@
+import { formatSymbol, parseSymbol } from "./lib/symbol.js";
 import { getSupabaseAdmin } from "./supabase.js";
 
-export const DEFAULT_WATCHLIST: string[] = ["AAPL", "TSLA", "HOOD", "BE"];
+export const DEFAULT_WATCHLIST: string[] = [
+  "AAPL.US",
+  "TSLA.US",
+  "HOOD.US",
+  "BE.US",
+];
 
+// Normalize any input to a qualified symbol (TICKER.EXCHANGE). Legacy bare
+// tickers like "AAPL" parse as US and become "AAPL.US" — this migrates old
+// watchlist rows on read.
 function normalizeTicker(input: unknown): string | null {
-  if (typeof input !== "string") return null;
-  const s = input.trim().toUpperCase();
-  if (!s) return null;
-  return /^[A-Z][A-Z0-9.\-]{0,9}$/.test(s) ? s : null;
+  const parsed = parseSymbol(input);
+  return parsed ? formatSymbol(parsed.ticker, parsed.exchange) : null;
 }
 
 function dedupe(tickers: unknown): string[] {

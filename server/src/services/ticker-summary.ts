@@ -1,11 +1,15 @@
 import { getDb } from "../db.js";
 import { buildEvalContext } from "../eval-context.js";
+import { currencyFor, formatSymbol, parseSymbol } from "../lib/symbol.js";
 import type { ComboStatus, PriceRow } from "../types.js";
 import { evaluateCombos, listCombos } from "./combos.js";
 import { getSecurity } from "./securities.js";
 
 export interface TickerSummary {
+  symbol: string;
   ticker: string;
+  exchange: string;
+  currency: string;
   name: string;
   dataReady: boolean;
   currentPrice?: number;
@@ -39,10 +43,10 @@ function asNumber(v: unknown): number {
   throw new Error(`cannot convert to number: ${String(v)}`);
 }
 
-async function isReady(ticker: string): Promise<boolean> {
+async function isReady(ticker: string, exchange: string): Promise<boolean> {
   const db = await getDb();
   const reader = await db.runAndReadAll(
-    `SELECT status FROM ticker_cache WHERE ticker = ${sqlLit(ticker)}`,
+    `SELECT status FROM ticker_cache WHERE ticker = ${sqlLit(ticker)} AND exchange = ${sqlLit(exchange)}`,
   );
   const rows = reader.getRowObjectsJS();
   return rows.length > 0 && rows[0]!.status === "ok";
@@ -50,21 +54,27 @@ async function isReady(ticker: string): Promise<boolean> {
 
 export async function getTickerSummary(
   userId: string,
-  ticker: string,
+  symbolInput: string,
 ): Promise<TickerSummary> {
-  const security = await getSecurity(ticker);
+  const parsed = parseSymbol(symbolInput);
+  const ticker = parsed?.ticker ?? symbolInput.toUpperCase();
+  const exchange = parsed?.exchange ?? "US";
+  const symbol = formatSymbol(ticker, exchange);
+  const currency = currencyFor(exchange);
+  const security = await getSecurity(ticker, exchange);
   const name = security?.name ?? ticker;
-  const ready = await isReady(ticker);
-  if (!ready) return { ticker, name, dataReady: false };
+  const base = { symbol, ticker, exchange, currency, name };
+  const ready = await isReady(ticker, exchange);
+  if (!ready) return { ...base, dataReady: false };
 
   const db = await getDb();
   const priceReader = await db.runAndReadAll(
     `SELECT date, open, high, low, close, volume FROM prices
-     WHERE ticker = ${sqlLit(ticker)}
+     WHERE ticker = ${sqlLit(ticker)} AND exchange = ${sqlLit(exchange)}
      ORDER BY date ASC`,
   );
   const priceRows = priceReader.getRowObjectsJS();
-  if (priceRows.length === 0) return { ticker, name, dataReady: false };
+  if (priceRows.length === 0) return { ...base, dataReady: false };
 
   const prices: PriceRow[] = priceRows.map((r) => ({
     date: toIsoDate(r.date),
@@ -85,8 +95,7 @@ export async function getTickerSummary(
   const greenComboCount = statuses.filter((s) => s.green).length;
 
   return {
-    ticker,
-    name,
+    ...base,
     dataReady: true,
     currentPrice: Number(latest.close.toFixed(2)),
     priceChange: Number(priceChange.toFixed(2)),
