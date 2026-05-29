@@ -150,7 +150,39 @@
 
 /* Ticker hero card */
 .dbg .ticker-card { padding: 28px 30px; margin-bottom: 20px; }
-.dbg .ticker-head { display: flex; align-items: baseline; gap: 12px; font-family: var(--d-mono); flex-wrap: wrap; }
+.dbg .ticker-head { display: flex; align-items: baseline; gap: 12px; font-family: var(--d-mono); flex-wrap: wrap; padding-right: 180px; }
+
+/* Add / remove watchlist toggle (top-right of hero) */
+.dbg .wl-toggle {
+  position: absolute; top: 22px; right: 24px; z-index: 1;
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 14px; border-radius: 999px;
+  font-family: var(--d-sans); font-size: 12.5px; font-weight: 500;
+  letter-spacing: -0.005em; cursor: pointer; white-space: nowrap;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, opacity 0.18s ease;
+}
+.dbg .wl-toggle .wl-toggle-icon {
+  font-family: var(--d-mono); font-size: 14px; line-height: 1; font-weight: 600;
+}
+/* "Add" — the recommended action: bright white */
+.dbg .wl-toggle {
+  background: var(--d-fg); color: var(--d-bg); border: 1px solid transparent;
+}
+.dbg .wl-toggle:hover:not(:disabled) { background: rgba(255,255,255,0.85); }
+/* "Remove" — not recommended: darkish, low-emphasis */
+.dbg .wl-toggle.in {
+  background: rgba(255,255,255,0.04); color: var(--d-fg-3);
+  border: 1px solid var(--d-border);
+}
+.dbg .wl-toggle.in:hover:not(:disabled) {
+  background: rgba(255,255,255,0.07); color: var(--d-fg-2);
+  border-color: var(--d-border-strong);
+}
+.dbg .wl-toggle:disabled { opacity: 0.55; cursor: default; }
+@media (max-width: 560px) {
+  .dbg .ticker-head { padding-right: 0; }
+  .dbg .wl-toggle { position: static; margin-bottom: 16px; align-self: flex-start; }
+}
 .dbg .ticker-symbol {
   font-size: 28px; font-weight: 600; letter-spacing: -0.01em;
   background: linear-gradient(180deg, #ffffff 0%, rgba(255,255,255,0.7) 100%);

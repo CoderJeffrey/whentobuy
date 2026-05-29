@@ -50,6 +50,10 @@
   "dashboard.dayRange": "Day range",
   "dashboard.volume": "Volume",
   "dashboard.prevClose": "Prev close",
+  "dashboard.addToWatchlist": "Add to watchlist",
+  "dashboard.removeFromWatchlist": "Remove from watchlist",
+  "dashboard.adding": "Adding…",
+  "dashboard.removing": "Removing…",
 
   "combos.yourCombos": "Your combos",
   "combos.manage": "MANAGE →",
