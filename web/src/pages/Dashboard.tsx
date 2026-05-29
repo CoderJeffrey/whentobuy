@@ -6,6 +6,7 @@ import { fetchDashboard } from "../lib/api";
 import { PriceChart } from "../components/PriceChart";
 import { SearchBar } from "../components/SearchBar";
 import { Watchlist } from "../components/Watchlist";
+import { useWatchlist } from "../hooks/useWatchlist";
 import { formatPrice, formatSymbol, marketBadge, parseSymbol } from "../lib/symbol";
 import type { ComboStatus, DashboardResponse } from "../types";
 import "./Dashboard.css";
@@ -95,7 +96,7 @@ export default function Dashboard() {
               data-testid="dashboard-loaded"
               data-fetching={isFetching ? "true" : "false"}
             >
-              <TickerHero data={data} />
+              <TickerHero data={data} symbol={symbol} />
               <CombosSection combos={data.combos} />
               <ChartCard data={data} />
             </div>
@@ -110,16 +111,50 @@ export default function Dashboard() {
   );
 }
 
-function TickerHero({ data }: { data: DashboardResponse }) {
+function TickerHero({ data, symbol }: { data: DashboardResponse; symbol: string }) {
   const { t } = useTranslation();
+  const { query, add, remove } = useWatchlist();
   const positive = data.priceChange >= 0;
   const sign = data.priceChangePct >= 0 ? "+" : "";
   const last = data.priceHistory[data.priceHistory.length - 1];
   const prev = data.priceHistory[data.priceHistory.length - 2];
   const { currency } = data;
 
+  const inWatchlist = (query.data?.tickers ?? []).some((tk) => tk.symbol === symbol);
+  const pending =
+    (add.isPending && add.variables === symbol) ||
+    (remove.isPending && remove.variables === symbol);
+
+  function toggleWatchlist() {
+    if (pending) return;
+    if (inWatchlist) remove.mutate(symbol);
+    else add.mutate(symbol);
+  }
+
+  const label = pending
+    ? inWatchlist
+      ? t("dashboard.removing")
+      : t("dashboard.adding")
+    : inWatchlist
+      ? t("dashboard.removeFromWatchlist")
+      : t("dashboard.addToWatchlist");
+
   return (
     <div className="card ticker-card" data-testid="ticker-hero">
+      <button
+        type="button"
+        onClick={toggleWatchlist}
+        disabled={pending || query.isPending}
+        className={`wl-toggle${inWatchlist ? " in" : ""}`}
+        data-testid="watchlist-toggle"
+        data-in-watchlist={inWatchlist ? "true" : "false"}
+        aria-pressed={inWatchlist}
+      >
+        <span className="wl-toggle-icon" aria-hidden>
+          {inWatchlist ? "−" : "+"}
+        </span>
+        {label}
+      </button>
       <div className="ticker-head">
         <span className="ticker-symbol">{data.ticker}</span>
         <span className={`mkt-badge mkt-${marketBadge(data.exchange).toLowerCase()}`}>

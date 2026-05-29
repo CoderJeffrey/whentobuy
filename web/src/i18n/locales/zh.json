@@ -50,6 +50,10 @@
   "dashboard.dayRange": "当日区间",
   "dashboard.volume": "成交量",
   "dashboard.prevClose": "昨收",
+  "dashboard.addToWatchlist": "加入自选",
+  "dashboard.removeFromWatchlist": "移出自选",
+  "dashboard.adding": "添加中…",
+  "dashboard.removing": "移除中…",
 
   "combos.yourCombos": "你的组合",
   "combos.manage": "管理 →",
