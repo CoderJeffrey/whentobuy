@@ -28,7 +28,8 @@ createRoot(document.getElementById("root")!).render(
       persistOptions={{
         persister,
         maxAge: 24 * 60 * 60 * 1000,
-        buster: "v5-ashares-exchange",
+        // Auto-busts on every deploy (git SHA / build id) — no manual bump.
+        buster: __BUILD_ID__,
       }}
     >
       <App />
