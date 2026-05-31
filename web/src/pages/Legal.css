@@ -1,0 +1,170 @@
+/* Legal pages (/terms, /privacy) — prose layout on top of the landing `.lp`
+   monochrome design system. */
+
+.lp.legal-page {
+  overflow-x: hidden;
+}
+
+.lp .legal-wrap {
+  position: relative;
+  z-index: 1;
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 132px 32px 24px;
+}
+
+/* ===== Header ===== */
+.lp .legal-head {
+  padding-bottom: 28px;
+  margin-bottom: 36px;
+  border-bottom: 1px solid var(--lp-border);
+}
+.lp .legal-eyebrow {
+  font-family: var(--lp-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: var(--lp-fg-3);
+}
+.lp .legal-head h1 {
+  font-size: 40px;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+  font-weight: 600;
+  margin: 14px 0 0;
+  background: linear-gradient(180deg, #ffffff 0%, rgba(255, 255, 255, 0.7) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.lp .legal-updated {
+  font-family: var(--lp-mono);
+  font-size: 12px;
+  color: var(--lp-fg-4);
+  margin: 14px 0 0;
+}
+.lp .legal-intro {
+  font-size: 16px;
+  color: var(--lp-fg-2);
+  line-height: 1.6;
+  margin: 18px 0 0;
+}
+
+/* ===== Prose ===== */
+.lp .legal-prose {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--lp-fg-2);
+}
+.lp .legal-prose section {
+  border: none;
+  margin-bottom: 36px;
+}
+.lp .legal-prose section::after {
+  display: none;
+}
+.lp .legal-prose h2 {
+  font-size: 13px;
+  font-family: var(--lp-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lp-fg);
+  margin: 0 0 14px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.lp .legal-prose h2 .num {
+  color: var(--lp-fg-4);
+  font-weight: 500;
+}
+.lp .legal-prose h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--lp-fg);
+  margin: 22px 0 8px;
+}
+.lp .legal-prose p {
+  margin: 0 0 14px;
+}
+.lp .legal-prose a {
+  color: var(--lp-fg);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: var(--lp-border-strong);
+}
+.lp .legal-prose a:hover {
+  text-decoration-color: var(--lp-fg);
+}
+.lp .legal-prose strong {
+  color: var(--lp-fg);
+  font-weight: 600;
+}
+.lp .legal-prose ul {
+  margin: 0 0 14px;
+  padding-left: 20px;
+  list-style: none;
+}
+.lp .legal-prose li {
+  position: relative;
+  margin: 0 0 8px;
+  padding-left: 4px;
+}
+.lp .legal-prose li::before {
+  content: "—";
+  position: absolute;
+  left: -20px;
+  color: var(--lp-fg-4);
+}
+.lp .legal-prose .callout {
+  border: 1px solid var(--lp-border-strong);
+  border-radius: 12px;
+  background: var(--lp-bg-elev);
+  padding: 18px 20px;
+  margin: 0 0 18px;
+}
+.lp .legal-prose .callout strong {
+  display: block;
+  margin-bottom: 6px;
+  font-family: var(--lp-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* ===== Cross-links ===== */
+.lp .legal-cross {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 0 8px;
+  font-family: var(--lp-mono);
+  font-size: 13px;
+  color: var(--lp-fg-3);
+  border-top: 1px solid var(--lp-border);
+}
+.lp .legal-cross a {
+  color: var(--lp-fg-2);
+}
+.lp .legal-cross a:hover {
+  color: var(--lp-fg);
+}
+.lp .footer-base a {
+  color: var(--lp-fg-3);
+}
+.lp .footer-base a:hover {
+  color: var(--lp-fg);
+}
+
+@media (max-width: 640px) {
+  .lp .legal-wrap {
+    padding: 104px 20px 16px;
+  }
+  .lp .legal-head h1 {
+    font-size: 30px;
+  }
+  .lp .footer-base {
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+  }
+}

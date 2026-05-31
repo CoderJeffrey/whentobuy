@@ -106,8 +106,8 @@ export default function Login() {
               <Trans
                 i18nKey="login.agreement"
                 components={{
-                  terms: <a href="#" />,
-                  privacy: <a href="#" />,
+                  terms: <Link to="/terms" />,
+                  privacy: <Link to="/privacy" />,
                 }}
               />
             </div>

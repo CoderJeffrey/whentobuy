@@ -734,7 +734,8 @@ export default function Landing() {
             <div className="foot-col">
               <h4>Company</h4>
               <a href="#">About</a>
-              <a href="#">Terms</a>
+              <Link to="/privacy">Privacy</Link>
+              <Link to="/terms">Terms</Link>
             </div>
           </div>
           <div className="footer-base">

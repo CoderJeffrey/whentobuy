@@ -10,6 +10,8 @@ import Mail from "./pages/Mail";
 import Settings from "./pages/Settings";
 import Unsubscribe from "./pages/Unsubscribe";
 import WatchlistPage from "./pages/WatchlistPage";
+import Terms from "./pages/Terms";
+import Privacy from "./pages/Privacy";
 
 function LegacyTickerRedirect() {
   const { symbol } = useParams<{ symbol: string }>();
@@ -78,6 +80,8 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<LoginRoute />} />
           <Route path="/unsubscribe" element={<Unsubscribe />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Privacy />} />
           <Route path="*" element={<ProtectedRoutes />} />
         </Routes>
       </BrowserRouter>
