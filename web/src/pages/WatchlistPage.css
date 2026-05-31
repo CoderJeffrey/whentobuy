@@ -1,0 +1,42 @@
+/* Standalone watchlist screen. Inherits the `.dbg` monochrome glass system and
+   reuses the `.wl-*` styles defined in Dashboard.css. */
+
+.dbg.wl-page {
+  min-height: 100vh;
+}
+
+.dbg .wl-page-inner {
+  position: relative;
+  z-index: 1;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 22px 22px 80px;
+}
+
+.dbg .wl-page-title {
+  font-family: var(--d-mono);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0 0 18px;
+  background: linear-gradient(180deg, #ffffff 0%, rgba(255, 255, 255, 0.7) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* The page hides its own redundant "// Watchlist" header (the page has a title). */
+.dbg .wl-page-inner .wl-head {
+  display: none;
+}
+
+/* Larger, touch-friendly cards on the dedicated screen. */
+@media (max-width: 767px) {
+  .dbg .wl-page-inner .wl-item {
+    padding: 16px 18px;
+  }
+  .dbg .wl-page-inner .wl-add {
+    padding: 16px;
+    min-height: 52px;
+  }
+}

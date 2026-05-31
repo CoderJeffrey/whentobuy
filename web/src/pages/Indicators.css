@@ -353,3 +353,48 @@
 @media (max-width: 1024px) {
   .ibg .main { padding: 32px 24px 60px; }
 }
+
+/* Mobile (<768px): 2-up grids, horizontal-scroll category pills. */
+@media (max-width: 767px) {
+  .ibg .main { padding: 24px 16px 32px; }
+  .ibg .page-title { font-size: 26px; }
+
+  /* Combos: 2 per row, with the "new" placeholder spanning full width below. */
+  .ibg .combos-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 32px; }
+  .ibg .combo-card.new-card { grid-column: 1 / -1; min-height: 88px; }
+
+  /* Indicators: 2 per row. */
+  .ibg .ind-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .ibg .ind-card { min-height: 168px; padding: 16px 16px 12px; }
+
+  /* Category pills scroll horizontally instead of wrapping. */
+  .ibg .cat-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    margin-left: -16px;
+    margin-right: -16px;
+    padding: 0 16px;
+  }
+  .ibg .cat-chips::-webkit-scrollbar { display: none; }
+  .ibg .chip { flex-shrink: 0; min-height: 36px; }
+
+  /* Larger search + "new combo" tap targets. */
+  .ibg .lib-search { padding: 13px 16px; }
+  .ibg .lib-search .kbd { display: none; }
+  .ibg .new-btn { min-height: 44px; padding: 11px 16px; }
+
+  /* Keep the toast clear of the bottom tab bar. */
+  .ibg .ind-notice {
+    left: 16px;
+    right: 16px;
+    bottom: calc(56px + env(safe-area-inset-bottom) + 16px);
+  }
+}
+
+/* Smallest phones (<400px): drop to a single column. */
+@media (max-width: 399px) {
+  .ibg .combos-grid,
+  .ibg .ind-grid { grid-template-columns: 1fr; }
+}

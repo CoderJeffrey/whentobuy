@@ -9,6 +9,7 @@ import Login from "./pages/Login";
 import Mail from "./pages/Mail";
 import Settings from "./pages/Settings";
 import Unsubscribe from "./pages/Unsubscribe";
+import WatchlistPage from "./pages/WatchlistPage";
 
 function LegacyTickerRedirect() {
   const { symbol } = useParams<{ symbol: string }>();
@@ -58,6 +59,7 @@ function ProtectedRoutes() {
       <Route element={<AppLayout />}>
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/dashboard/:symbol" element={<Dashboard />} />
+        <Route path="/watchlist" element={<WatchlistPage />} />
         <Route path="/indicators" element={<Indicators />} />
         <Route path="/mail" element={<Mail />} />
         <Route path="/settings" element={<Settings />} />

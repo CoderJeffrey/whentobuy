@@ -33,6 +33,10 @@
 @media (min-width: 1280px) {
   .ihsb { width: 248px; padding: 22px 18px; }
 }
+/* Mobile: sidebar is replaced by the bottom tab bar. */
+@media (max-width: 767px) {
+  .ihsb { display: none; }
+}
 .ihsb a { color: inherit; text-decoration: none; }
 .ihsb button { font-family: inherit; cursor: pointer; }
 
