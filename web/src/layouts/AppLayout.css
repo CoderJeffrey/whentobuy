@@ -1,0 +1,13 @@
+/* App shell — accounts for the fixed bottom tab bar on mobile, and the
+   iPhone notch via safe-area insets. Desktop (≥768px) is unchanged. */
+
+@media (max-width: 767px) {
+  .app-shell {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  /* Reserve space so page content can scroll clear of the fixed tab bar. */
+  .app-content {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom));
+  }
+}

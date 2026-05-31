@@ -7,6 +7,7 @@ import { PriceChart } from "../components/PriceChart";
 import { SearchBar } from "../components/SearchBar";
 import { Watchlist } from "../components/Watchlist";
 import { useWatchlist } from "../hooks/useWatchlist";
+import { useIsMobile } from "../hooks/useMediaQuery";
 import { formatPrice, formatSymbol, marketBadge, parseSymbol } from "../lib/symbol";
 import type { ComboStatus, DashboardResponse } from "../types";
 import "./Dashboard.css";
@@ -35,6 +36,7 @@ function formatVolume(v: number | undefined): string {
 
 export default function Dashboard() {
   const { t } = useTranslation();
+  const isMobile = useIsMobile();
   const { symbol: symbolParam } = useParams<{ symbol: string }>();
   const raw = symbolParam ?? "AAPL.US";
   const parsed = parseSymbol(raw);
@@ -103,9 +105,13 @@ export default function Dashboard() {
           )}
         </main>
 
-        <aside className="watchlist-panel">
-          <Watchlist activeSymbol={symbol} />
-        </aside>
+        {/* Watchlist lives in its own `/watchlist` screen on mobile (bottom tab),
+            so the dashboard only embeds it as a sidebar at ≥768px. */}
+        {!isMobile && (
+          <aside className="watchlist-panel">
+            <Watchlist activeSymbol={symbol} />
+          </aside>
+        )}
       </div>
     </div>
   );

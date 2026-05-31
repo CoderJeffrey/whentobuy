@@ -13,7 +13,6 @@ interface Props {
 
 export function WatchlistItem({ item, active, onRemove, removing }: Props) {
   const { t } = useTranslation();
-  const [hovered, setHovered] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
   const greenCount = item.greenComboCount ?? 0;
@@ -28,11 +27,7 @@ export function WatchlistItem({ item, active, onRemove, removing }: Props) {
 
   return (
     <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => {
-        setHovered(false);
-        setConfirming(false);
-      }}
+      onMouseLeave={() => setConfirming(false)}
       className={`wl-item${active ? " active" : ""}`}
       data-testid="watchlist-item"
       data-ticker={item.ticker}
@@ -84,21 +79,20 @@ export function WatchlistItem({ item, active, onRemove, removing }: Props) {
               </div>
               <div className="wl-name">{item.name}</div>
             </div>
-            {hovered && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setConfirming(true);
-                }}
-                aria-label={t("watchlist.removeTicker", { ticker: item.ticker })}
-                className="wl-remove"
-                data-testid="watchlist-remove"
-              >
-                ✕
-              </button>
-            )}
+            {/* Visible-on-hover for mouse, always-visible on touch (see CSS). */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setConfirming(true);
+              }}
+              aria-label={t("watchlist.removeTicker", { ticker: item.ticker })}
+              className="wl-remove"
+              data-testid="watchlist-remove"
+            >
+              ✕
+            </button>
           </div>
 
           {item.dataReady ? (

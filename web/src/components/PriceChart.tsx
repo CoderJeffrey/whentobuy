@@ -152,7 +152,7 @@ export function PriceChart({
         <div
           ref={containerRef}
           data-testid="price-chart"
-          style={{ width: "100%", height: 360 }}
+          className="chart-canvas"
         />
       </div>
     </div>
