@@ -53,7 +53,7 @@
   }
 
   .btab-item.active {
-    color: var(--accent, #c9b896);
+    color: #ffffff;
   }
 
   .btab-item.active svg {
