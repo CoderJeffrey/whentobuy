@@ -1,9 +1,9 @@
 import { getDb } from "../db.js";
-import { buildEvalContext } from "../eval-context.js";
 import { currencyFor, formatSymbol, parseSymbol } from "../lib/symbol.js";
-import type { ComboStatus, PriceRow } from "../types.js";
+import type { ComboStatus } from "../types.js";
 import { evaluateCombos, listCombos } from "./combos.js";
 import { getSecurity } from "./securities.js";
+import { ctxByTimeframe, loadTimeframeData } from "./timeframe-data.js";
 
 export interface TickerSummary {
   symbol: string;
@@ -26,27 +26,10 @@ function sqlLit(s: string): string {
   return `'${s.replace(/'/g, "''")}'`;
 }
 
-function toIsoDate(value: unknown): string {
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
-  if (typeof value === "string") return value.slice(0, 10);
-  if (value && typeof value === "object" && "days" in (value as object)) {
-    const days = Number((value as { days: number }).days);
-    return new Date(days * 86400_000).toISOString().slice(0, 10);
-  }
-  throw new Error(`cannot convert to ISO date: ${String(value)}`);
-}
-
-function asNumber(v: unknown): number {
-  if (typeof v === "number") return v;
-  if (typeof v === "bigint") return Number(v);
-  if (typeof v === "string") return Number(v);
-  throw new Error(`cannot convert to number: ${String(v)}`);
-}
-
 async function isReady(ticker: string, exchange: string): Promise<boolean> {
   const db = await getDb();
   const reader = await db.runAndReadAll(
-    `SELECT status FROM ticker_cache WHERE ticker = ${sqlLit(ticker)} AND exchange = ${sqlLit(exchange)}`,
+    `SELECT status FROM ticker_cache WHERE ticker = ${sqlLit(ticker)} AND exchange = ${sqlLit(exchange)} AND timeframe = 'daily'`,
   );
   const rows = reader.getRowObjectsJS();
   return rows.length > 0 && rows[0]!.status === "ok";
@@ -67,31 +50,18 @@ export async function getTickerSummary(
   const ready = await isReady(ticker, exchange);
   if (!ready) return { ...base, dataReady: false };
 
-  const db = await getDb();
-  const priceReader = await db.runAndReadAll(
-    `SELECT date, open, high, low, close, volume FROM prices
-     WHERE ticker = ${sqlLit(ticker)} AND exchange = ${sqlLit(exchange)}
-     ORDER BY date ASC`,
-  );
-  const priceRows = priceReader.getRowObjectsJS();
-  if (priceRows.length === 0) return { ...base, dataReady: false };
+  const data = await loadTimeframeData(ticker, exchange);
+  const daily = data.daily;
+  if (!daily || daily.bars.length === 0) return { ...base, dataReady: false };
 
-  const prices: PriceRow[] = priceRows.map((r) => ({
-    date: toIsoDate(r.date),
-    open: asNumber(r.open),
-    high: asNumber(r.high),
-    low: asNumber(r.low),
-    close: asNumber(r.close),
-    volume: asNumber(r.volume),
-  }));
-  const latest = prices[prices.length - 1]!;
-  const prev = prices[prices.length - 2];
+  const bars = daily.bars;
+  const latest = bars[bars.length - 1]!;
+  const prev = bars[bars.length - 2];
   const priceChange = prev ? latest.close - prev.close : 0;
   const priceChangePct = prev ? (priceChange / prev.close) * 100 : 0;
 
-  const ctx = buildEvalContext(prices);
   const combos = await listCombos(userId);
-  const statuses = await evaluateCombos(combos, ctx);
+  const statuses = await evaluateCombos(combos, ctxByTimeframe(data));
   const greenComboCount = statuses.filter((s) => s.green).length;
 
   return {

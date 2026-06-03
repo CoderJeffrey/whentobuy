@@ -1,9 +1,11 @@
 import type {
   ApiErrorCode,
   Combo,
+  ComboIndicatorRef,
   DashboardResponse,
   IndicatorMeta,
   Security,
+  Timeframe,
   WatchlistResponse,
 } from "../types";
 import { ApiError } from "../types";
@@ -105,7 +107,7 @@ export async function fetchCombos(signal?: AbortSignal): Promise<Combo[]> {
 
 export async function createCombo(input: {
   name: string;
-  indicatorIds: string[];
+  indicators: ComboIndicatorRef[];
 }): Promise<Combo> {
   const res = await fetchWithAuth("/api/combos", {
     method: "POST",
@@ -118,7 +120,7 @@ export async function createCombo(input: {
 
 export async function updateCombo(
   comboId: string,
-  input: { name?: string; indicatorIds?: string[] },
+  input: { name?: string; indicators?: ComboIndicatorRef[] },
 ): Promise<Combo> {
   const res = await fetchWithAuth(
     `/api/combos/${encodeURIComponent(comboId)}`,
@@ -140,10 +142,11 @@ export async function deleteCombo(comboId: string): Promise<void> {
 export async function addIndicatorToCombo(
   comboId: string,
   indicatorId: string,
+  timeframe: Timeframe = "daily",
 ): Promise<Combo> {
   const res = await fetchWithAuth(
     `/api/combos/${encodeURIComponent(comboId)}/indicators`,
-    { method: "POST", body: JSON.stringify({ indicatorId }) },
+    { method: "POST", body: JSON.stringify({ indicatorId, timeframe }) },
   );
   if (!res.ok) throw await readError(res);
   const json = (await res.json()) as { combo: Combo };
@@ -153,9 +156,11 @@ export async function addIndicatorToCombo(
 export async function removeIndicatorFromCombo(
   comboId: string,
   indicatorId: string,
+  timeframe?: Timeframe,
 ): Promise<Combo> {
+  const qs = timeframe ? `?timeframe=${encodeURIComponent(timeframe)}` : "";
   const res = await fetchWithAuth(
-    `/api/combos/${encodeURIComponent(comboId)}/indicators/${encodeURIComponent(indicatorId)}`,
+    `/api/combos/${encodeURIComponent(comboId)}/indicators/${encodeURIComponent(indicatorId)}${qs}`,
     { method: "DELETE" },
   );
   if (!res.ok) throw await readError(res);

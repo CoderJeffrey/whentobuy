@@ -2,12 +2,28 @@ export type IndicatorId = string;
 
 export type IndicatorCategory = string;
 
+export type Timeframe = "daily" | "weekly" | "monthly";
+
+export const TIMEFRAMES: Timeframe[] = ["daily", "weekly", "monthly"];
+
+export const TIMEFRAME_LABELS: Record<Timeframe, string> = {
+  daily: "Daily",
+  weekly: "Weekly",
+  monthly: "Monthly",
+};
+
 export interface IndicatorMeta {
   id: IndicatorId;
   label: string;
   abbreviation: string;
   category: IndicatorCategory;
   description: string;
+  supportedTimeframes: Timeframe[];
+}
+
+export interface ComboIndicatorRef {
+  indicatorId: IndicatorId;
+  timeframe: Timeframe;
 }
 
 export interface PriceBar {
@@ -28,6 +44,7 @@ export interface ComboIndicatorStatus {
   indicatorId: IndicatorId;
   label: string;
   abbreviation: string;
+  timeframe: Timeframe;
   triggered: boolean;
   displayValue: string;
 }
@@ -42,9 +59,20 @@ export interface ComboStatus {
 export interface Combo {
   id: string;
   name: string;
-  indicatorIds: IndicatorId[];
+  indicators: ComboIndicatorRef[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TimeframeSeries {
+  bars: PriceBar[];
+  sma200: SmaPoint[];
+}
+
+export interface PriceChart {
+  daily: TimeframeSeries;
+  weekly: TimeframeSeries;
+  monthly: TimeframeSeries;
 }
 
 export interface DashboardResponse {
@@ -62,6 +90,7 @@ export interface DashboardResponse {
   anyGreen: boolean;
   priceHistory: PriceBar[];
   sma200Series: SmaPoint[];
+  priceChart: PriceChart;
 }
 
 export interface Security {

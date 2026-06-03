@@ -39,6 +39,12 @@ The system deliberately splits persistence across two stores:
   the daily cron runs *in-process* rather than as a separate service — a Railway
   volume attaches to only one service.
 
+  Prices and indicators exist at three **timeframes** (Part 27): the daily tables
+  above plus `prices_weekly` / `indicators_weekly` and `prices_monthly` /
+  `indicators_monthly` (identical shapes, ~1/5 and ~1/20 the rows). `ticker_cache`
+  tracks freshness *per timeframe* — its PK is `(ticker, exchange, timeframe)` — so
+  a weekly coverage gap (common for A-shares) doesn't poison the daily cache.
+
 There is no ORM. Postgres access goes through the Supabase JS client; DuckDB access
 is hand-written SQL strings (note `sqlLit()` helpers for escaping — there is no
 parameter binding on the DuckDB path).
@@ -73,7 +79,14 @@ This is the heart of the app and spans three files:
   has metadata (`id`, `label`, `abbreviation`, `category`, `description`) plus a pure
   `evaluate(ctx) => { triggered, displayValue }`. This is the single source of truth
   for what indicators exist. `INDICATOR_METADATA` (metadata only) is what the API
-  exposes; `isIndicatorId()` validates IDs coming from clients.
+  exposes; `isIndicatorId()` validates IDs coming from clients. `supportedTimeframes`
+  is derived from category — `market` indicators (VIX, F&G) are daily-only, everything
+  else supports daily/weekly/monthly.
+- **`services/timeframe-data.ts`** — `loadTimeframeData(ticker, exchange)` loads bars
+  and builds an `EvalContext` (plus chart bars + SMA-200) for each timeframe that has
+  stored prices. Note: combo evaluation is built from the `prices*` tables on every
+  request, *not* from the precomputed `indicators*` tables — those are written during
+  backfill but are not read on the eval path.
 - **`indicators.ts`** — lower-level raw indicator computation used to persist the
   `indicators` table during backfill.
 
@@ -84,10 +97,13 @@ are just strings stored in `combo_indicators` / `user_indicator_library`.
 ### Combos & watchlist (services)
 
 `services/combos.ts` is the user-facing layer over the registry. A **combo** is a
-named set of indicator IDs (max 5 combos/user, `MAX_COMBOS_PER_USER`). `evaluateCombos(combos, ctx)`
-runs each combo's indicators against an `EvalContext`; a combo is `green` only when
-*all* its indicators trigger (boolean AND). New users are seeded with a default combo
-("Oversold + Uptrend").
+named set of indicator instances, each pinned to a timeframe (`{ indicatorId, timeframe }`,
+max 5 combos/user, `MAX_COMBOS_PER_USER`). The same indicator may appear at multiple
+timeframes in one combo. `evaluateCombos(combos, ctxByTimeframe)` resolves each indicator
+against the `EvalContext` for its timeframe; a combo is `green` only when *all* its
+indicators trigger (boolean AND). If a timeframe has no data, that indicator reports
+"Data unavailable" and the combo can't go green. New users are seeded with a default
+combo ("Oversold + Uptrend", all daily).
 
 `watchlist.ts` + `services/indicator-library.ts` + `services/preferences.ts` are thin
 Supabase-backed CRUD services for the per-user watchlist, the indicator "library"
@@ -95,8 +111,10 @@ Supabase-backed CRUD services for the per-user watchlist, the indicator "library
 
 `services/securities.ts` loads the ticker→name universe (SEC ticker list); `services/backfill.ts`
 fetches price history from Yahoo Finance (`yahoo-finance2`), computes indicators, and
-upserts into DuckDB. `ensureTickerData()` is the lazy-load gate: it backfills on demand
-and records freshness in `ticker_cache`. `services/ticker-summary.ts` and
+upserts into DuckDB. `ensureTickerData()` is the lazy-load gate: it **blocks on the daily
+fetch** so the page renders fast, then kicks weekly + monthly (`1wk`/`1mo` intervals) in
+the background with a small delay and an in-flight dedupe guard. Failures are isolated
+per timeframe and recorded in `ticker_cache`. `services/ticker-summary.ts` and
 `services/name-normalize.ts` are supporting helpers.
 
 ### Daily job & email
@@ -112,9 +130,10 @@ All time logic flows through `lib/time.ts` (Luxon, `America/New_York`).
 
 1. `requireAuth` resolves `req.user`.
 2. `buildDashboard()` sanitizes the ticker, calls `ensureTickerData()` (lazy backfill).
-3. Reads price history from DuckDB, builds an `EvalContext`.
-4. Loads the user's combos from Supabase and runs `evaluateCombos()`.
-5. Returns `DashboardResponse`: price history, SMA-200 series, and per-combo green status.
+3. `loadTimeframeData()` reads prices from DuckDB and builds an `EvalContext` per timeframe.
+4. Loads the user's combos from Supabase and runs `evaluateCombos()` across timeframes.
+5. Returns `DashboardResponse`: daily price history + SMA-200, a `priceChart` with all three
+   timeframe series, and per-combo green status (each indicator tagged with its timeframe).
 
 ## Web (`web/src`)
 
@@ -147,8 +166,9 @@ both.
 - **Two type files, one contract** — keep `server/src/types.ts` and `web/src/types.ts`
   aligned.
 - **Manual migrations** — adding a Postgres table means writing a new
-  `server/migrations/NN_*.sql` *and* running it in Supabase by hand. DuckDB schema
-  changes go in `db.ts:migrate()`.
+  `server/migrations/NN_*.sql` *and* running it in Supabase by hand (they run in
+  numeric order; e.g. `18_combos.sql` must precede `21_combo_timeframe.sql`). DuckDB
+  schema changes go in `db.ts:migrate()` and apply automatically on next boot.
 - **Service-role key bypasses RLS** — server code is responsible for `user_id` scoping;
   RLS only protects direct client access.
 - **DuckDB SQL is string-built** — use the `sqlLit()` helpers; never interpolate raw

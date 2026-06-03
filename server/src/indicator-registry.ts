@@ -4,6 +4,7 @@ import type {
   IndicatorId,
   IndicatorMeta,
   MarketData,
+  Timeframe,
 } from "./types.js";
 
 export interface IndicatorEvaluation {
@@ -11,12 +12,29 @@ export interface IndicatorEvaluation {
   displayValue: string;
 }
 
-export interface IndicatorDef extends IndicatorMeta {
+// Registry literals omit `supportedTimeframes`; it is derived from category.
+export interface IndicatorDef extends Omit<IndicatorMeta, "supportedTimeframes"> {
   // Market-wide indicators read `marketData`; per-stock indicators ignore it.
   evaluate: (
     ctx: EvalContext,
     marketData?: MarketData | null,
   ) => IndicatorEvaluation;
+}
+
+const MARKET_CATEGORY = "market";
+
+/** Market-wide indicators (VIX, F&G) are daily-only; everything else supports all three. */
+export function supportedTimeframesFor(
+  category: IndicatorCategory,
+): Timeframe[] {
+  return category === MARKET_CATEGORY
+    ? ["daily"]
+    : ["daily", "weekly", "monthly"];
+}
+
+export function supportedTimeframesForId(id: IndicatorId): Timeframe[] {
+  const def = INDICATOR_REGISTRY[id];
+  return def ? supportedTimeframesFor(def.category) : ["daily"];
 }
 
 function fmt(n: number | null | undefined, digits = 2): string {
@@ -1313,6 +1331,7 @@ export const INDICATOR_METADATA: IndicatorMeta[] = REGISTRY.map(
     abbreviation,
     category,
     description,
+    supportedTimeframes: supportedTimeframesFor(category),
   }),
 ).sort((a, b) => a.label.localeCompare(b.label));
 

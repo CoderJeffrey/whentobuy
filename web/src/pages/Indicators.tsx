@@ -11,7 +11,7 @@ import {
 } from "../lib/api";
 import { ComboEditorModal } from "../components/ComboEditorModal";
 import { IndicatorDetailModal } from "../components/IndicatorDetailModal";
-import type { Combo, IndicatorMeta } from "../types";
+import type { Combo, ComboIndicatorRef, IndicatorMeta, Timeframe } from "../types";
 import { ApiError } from "../types";
 import "./Indicators.css";
 
@@ -22,7 +22,7 @@ const MAX_COMBOS = 5;
 
 type EditorState =
   | { kind: "closed" }
-  | { kind: "create"; seedIndicatorId?: string }
+  | { kind: "create"; seedIndicator?: ComboIndicatorRef }
   | { kind: "edit"; combo: Combo };
 
 export default function Indicators() {
@@ -70,7 +70,7 @@ export default function Indicators() {
   }
 
   const createMut = useMutation({
-    mutationFn: (input: { name: string; indicatorIds: string[] }) =>
+    mutationFn: (input: { name: string; indicators: ComboIndicatorRef[] }) =>
       createCombo(input),
     onSuccess: () => {
       invalidateDownstream();
@@ -87,11 +87,11 @@ export default function Indicators() {
     mutationFn: (input: {
       id: string;
       name: string;
-      indicatorIds: string[];
+      indicators: ComboIndicatorRef[];
     }) =>
       updateCombo(input.id, {
         name: input.name,
-        indicatorIds: input.indicatorIds,
+        indicators: input.indicators,
       }),
     onSuccess: () => {
       invalidateDownstream();
@@ -117,10 +117,12 @@ export default function Indicators() {
     mutationFn: ({
       comboId,
       indicatorId,
+      timeframe,
     }: {
       comboId: string;
       indicatorId: string;
-    }) => addIndicatorToCombo(comboId, indicatorId),
+      timeframe: Timeframe;
+    }) => addIndicatorToCombo(comboId, indicatorId, timeframe),
     onSuccess: (_data, vars) => {
       invalidateDownstream();
       const combo = combos.find((c) => c.id === vars.comboId);
@@ -190,23 +192,23 @@ export default function Indicators() {
   }, [marketplaceQ.data]);
 
   function comboSummary(combo: Combo): string {
-    const n = combo.indicatorIds.length;
+    const n = combo.indicators.length;
     const noun = t("combos.indicator", { count: n });
-    const abbrs = combo.indicatorIds
-      .map((id) => metaById.get(id)?.abbreviation)
+    const abbrs = combo.indicators
+      .map((ref) => metaById.get(ref.indicatorId)?.abbreviation)
       .filter((a): a is string => Boolean(a));
     if (abbrs.length === 0) return noun;
     const shown = abbrs.slice(0, 3).join(" · ");
     return `${noun} · ${shown}${abbrs.length > 3 ? " …" : ""}`;
   }
 
-  function openCreate(seedIndicatorId?: string) {
+  function openCreate(seedIndicator?: ComboIndicatorRef) {
     if (atLimit) {
       flash(t("combos.limitReached", { max: MAX_COMBOS }));
       return;
     }
     setEditorError(null);
-    setEditorState({ kind: "create", seedIndicatorId });
+    setEditorState({ kind: "create", seedIndicator });
     setDetailMeta(null);
   }
 
@@ -215,8 +217,12 @@ export default function Indicators() {
     setEditorState({ kind: "edit", combo });
   }
 
-  function handleAddToCombo(comboId: string, indicatorId: string) {
-    addIndMut.mutate({ comboId, indicatorId });
+  function handleAddToCombo(
+    comboId: string,
+    indicatorId: string,
+    timeframe: Timeframe,
+  ) {
+    addIndMut.mutate({ comboId, indicatorId, timeframe });
     setDetailMeta(null);
   }
 
@@ -417,10 +423,12 @@ export default function Indicators() {
           combos={combos}
           maxCombos={MAX_COMBOS}
           onClose={() => setDetailMeta(null)}
-          onAddToCombo={(comboId) =>
-            handleAddToCombo(comboId, detailMeta.id)
+          onAddToCombo={(comboId, timeframe) =>
+            handleAddToCombo(comboId, detailMeta.id, timeframe)
           }
-          onCreateCombo={() => openCreate(detailMeta.id)}
+          onCreateCombo={(timeframe) =>
+            openCreate({ indicatorId: detailMeta.id, timeframe })
+          }
         />
       )}
 
@@ -430,9 +438,9 @@ export default function Indicators() {
           initial={
             editorState.kind === "edit" ? editorState.combo : undefined
           }
-          seedIndicatorId={
+          seedIndicator={
             editorState.kind === "create"
-              ? editorState.seedIndicatorId
+              ? editorState.seedIndicator
               : undefined
           }
           marketplace={marketplaceQ.data ?? []}
@@ -452,7 +460,7 @@ export default function Indicators() {
                 await updateMut.mutateAsync({
                   id: editorState.combo.id,
                   name: input.name,
-                  indicatorIds: input.indicatorIds,
+                  indicators: input.indicators,
                 });
               } catch {
                 /* error surfaced via state */
@@ -497,7 +505,7 @@ function LibraryCard({
 }) {
   const { t } = useTranslation();
   const inCombos = combos.filter((c) =>
-    c.indicatorIds.includes(meta.id),
+    c.indicators.some((ref) => ref.indicatorId === meta.id),
   ).length;
   return (
     <button

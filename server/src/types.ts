@@ -2,12 +2,25 @@ export type IndicatorId = string;
 
 export type IndicatorCategory = string;
 
+/** Bar interval for a price series / indicator instance. */
+export type Timeframe = "daily" | "weekly" | "monthly";
+
+export const TIMEFRAMES: Timeframe[] = ["daily", "weekly", "monthly"];
+
 export interface IndicatorMeta {
   id: IndicatorId;
   label: string;
   abbreviation: string;
   category: IndicatorCategory;
   description: string;
+  /** Timeframes this indicator may be evaluated at (market-wide = daily only). */
+  supportedTimeframes: Timeframe[];
+}
+
+/** One indicator instance inside a combo, pinned to a timeframe. */
+export interface ComboIndicatorRef {
+  indicatorId: IndicatorId;
+  timeframe: Timeframe;
 }
 
 export interface MarketData {
@@ -35,6 +48,7 @@ export interface ComboIndicatorStatus {
   indicatorId: IndicatorId;
   label: string;
   abbreviation: string;
+  timeframe: Timeframe;
   triggered: boolean;
   displayValue: string;
 }
@@ -49,9 +63,21 @@ export interface ComboStatus {
 export interface Combo {
   id: string;
   name: string;
-  indicatorIds: IndicatorId[];
+  indicators: ComboIndicatorRef[];
   createdAt: string;
   updatedAt: string;
+}
+
+/** Price bars + SMA-200 overlay for a single timeframe. */
+export interface TimeframeSeries {
+  bars: PriceBar[];
+  sma200: SmaPoint[];
+}
+
+export interface PriceChart {
+  daily: TimeframeSeries;
+  weekly: TimeframeSeries;
+  monthly: TimeframeSeries;
 }
 
 export interface DashboardResponse {
@@ -67,8 +93,11 @@ export interface DashboardResponse {
   priceChangePct: number;
   combos: ComboStatus[];
   anyGreen: boolean;
+  /** Daily bars — retained for the ticker hero (open/volume/prev close). */
   priceHistory: PriceBar[];
   sma200Series: SmaPoint[];
+  /** All three timeframe series for the chart's Daily/Weekly/Monthly toggle. */
+  priceChart: PriceChart;
 }
 
 export interface PriceRow {
