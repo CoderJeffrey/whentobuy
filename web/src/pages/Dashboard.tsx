@@ -9,7 +9,7 @@ import { Watchlist } from "../components/Watchlist";
 import { useWatchlist } from "../hooks/useWatchlist";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { formatPrice, formatSymbol, marketBadge, parseSymbol } from "../lib/symbol";
-import type { ComboStatus, DashboardResponse } from "../types";
+import { TIMEFRAME_LABELS, type ComboStatus, type DashboardResponse } from "../types";
 import "./Dashboard.css";
 
 function formatLastUpdated(asOf: string | undefined): string {
@@ -284,6 +284,7 @@ function ComboRow({ combo }: { combo: ComboStatus }) {
               </span>
               <div className="ind-label">
                 {ind.label}
+                <span className="ind-tf">{TIMEFRAME_LABELS[ind.timeframe]}</span>
                 {ind.abbreviation && (
                   <span className="ind-abbr"> · {ind.abbreviation}</span>
                 )}
@@ -298,10 +299,5 @@ function ComboRow({ combo }: { combo: ComboStatus }) {
 }
 
 function ChartCard({ data }: { data: DashboardResponse }) {
-  return (
-    <PriceChart
-      priceHistory={data.priceHistory}
-      sma200Series={data.sma200Series}
-    />
-  );
+  return <PriceChart priceChart={data.priceChart} />;
 }

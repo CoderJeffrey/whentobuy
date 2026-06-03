@@ -1,23 +1,36 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
-import type { Combo, IndicatorMeta } from "../types";
+import {
+  TIMEFRAME_LABELS,
+  type Combo,
+  type ComboIndicatorRef,
+  type IndicatorMeta,
+  type Timeframe,
+} from "../types";
 import "./Modal.css";
 
 interface Props {
   mode: "create" | "edit";
   initial?: Combo;
-  seedIndicatorId?: string;
+  seedIndicator?: ComboIndicatorRef;
   marketplace: IndicatorMeta[];
   onClose: () => void;
-  onSave: (input: { name: string; indicatorIds: string[] }) => Promise<void>;
+  onSave: (input: {
+    name: string;
+    indicators: ComboIndicatorRef[];
+  }) => Promise<void>;
   onDelete?: () => Promise<void>;
   error?: string | null;
+}
+
+function refKey(ref: ComboIndicatorRef): string {
+  return `${ref.indicatorId}:${ref.timeframe}`;
 }
 
 export function ComboEditorModal({
   mode,
   initial,
-  seedIndicatorId,
+  seedIndicator,
   marketplace,
   onClose,
   onSave,
@@ -26,10 +39,10 @@ export function ComboEditorModal({
 }: Props) {
   const { t } = useTranslation();
   const [name, setName] = useState<string>(() => initial?.name ?? "");
-  const [indicatorIds, setIndicatorIds] = useState<string[]>(() => {
-    const base = initial?.indicatorIds ?? [];
-    if (seedIndicatorId && !base.includes(seedIndicatorId)) {
-      return [...base, seedIndicatorId];
+  const [indicators, setIndicators] = useState<ComboIndicatorRef[]>(() => {
+    const base = initial?.indicators ?? [];
+    if (seedIndicator && !base.some((r) => refKey(r) === refKey(seedIndicator))) {
+      return [...base, seedIndicator];
     }
     return base;
   });
@@ -50,22 +63,67 @@ export function ComboEditorModal({
     return map;
   }, [marketplace]);
 
-  const canSave = name.trim().length > 0 && indicatorIds.length > 0 && !saving;
+  const supportedFor = (id: string): Timeframe[] =>
+    metaById.get(id)?.supportedTimeframes ?? ["daily"];
 
-  function removeIndicator(id: string) {
-    setIndicatorIds((ids) => ids.filter((x) => x !== id));
+  // An indicator drops out of the picker only once every timeframe it supports
+  // is already in the combo.
+  const fullyUsedIds = useMemo(() => {
+    const used = new Map<string, Set<Timeframe>>();
+    for (const r of indicators) {
+      const set = used.get(r.indicatorId) ?? new Set<Timeframe>();
+      set.add(r.timeframe);
+      used.set(r.indicatorId, set);
+    }
+    const full = new Set<string>();
+    for (const [id, tfs] of used) {
+      if (supportedFor(id).every((tf) => tfs.has(tf))) full.add(id);
+    }
+    return full;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [indicators, metaById]);
+
+  const canSave = name.trim().length > 0 && indicators.length > 0 && !saving;
+
+  function removeIndicator(index: number) {
+    setIndicators((rows) => rows.filter((_, i) => i !== index));
   }
 
   function addIndicator(id: string) {
-    setIndicatorIds((ids) => (ids.includes(id) ? ids : [...ids, id]));
+    const supported = supportedFor(id);
+    const used = new Set(
+      indicators.filter((r) => r.indicatorId === id).map((r) => r.timeframe),
+    );
+    const tf = supported.find((t) => !used.has(t));
+    if (!tf) return;
+    setIndicators((rows) => [...rows, { indicatorId: id, timeframe: tf }]);
     setPickerOpen(false);
+  }
+
+  function changeTimeframe(index: number, tf: Timeframe) {
+    setIndicators((rows) => {
+      const target = rows[index];
+      if (!target) return rows;
+      // Don't allow collapsing onto an existing (indicator, timeframe) pair.
+      if (
+        rows.some(
+          (r, i) =>
+            i !== index &&
+            r.indicatorId === target.indicatorId &&
+            r.timeframe === tf,
+        )
+      ) {
+        return rows;
+      }
+      return rows.map((r, i) => (i === index ? { ...r, timeframe: tf } : r));
+    });
   }
 
   async function handleSave() {
     if (!canSave) return;
     setSaving(true);
     try {
-      await onSave({ name: name.trim(), indicatorIds });
+      await onSave({ name: name.trim(), indicators });
     } finally {
       setSaving(false);
     }
@@ -115,7 +173,7 @@ export function ComboEditorModal({
           <div>
             <div className="sec-head">
               <h4 className="sec-label">
-                {t("comboEditor.indicators", { count: indicatorIds.length })}
+                {t("comboEditor.indicators", { count: indicators.length })}
               </h4>
               <button
                 type="button"
@@ -127,34 +185,46 @@ export function ComboEditorModal({
               </button>
             </div>
 
-            {indicatorIds.length === 0 && !pickerOpen && (
+            {indicators.length === 0 && !pickerOpen && (
               <div className="empty">{t("comboEditor.emptyIndicators")}</div>
             )}
 
-            {indicatorIds.length > 0 && (
+            {indicators.length > 0 && (
               <div className="rows">
-                {indicatorIds.map((id) => {
-                  const meta = metaById.get(id);
+                {indicators.map((ref, index) => {
+                  const meta = metaById.get(ref.indicatorId);
+                  const supported = supportedFor(ref.indicatorId);
                   return (
                     <div
-                      key={id}
+                      key={refKey(ref)}
                       className="pick-row"
                       data-testid="combo-indicator-row"
                     >
                       <span className="pr-main">
-                        <span className="pr-name">{meta?.label ?? id}</span>
+                        <span className="pr-name">
+                          {meta?.label ?? ref.indicatorId}
+                        </span>
                         {meta?.abbreviation && (
                           <span className="pr-abbr">{meta.abbreviation}</span>
                         )}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => removeIndicator(id)}
-                        className="pr-remove"
-                        aria-label={t("comboEditor.removeIndicator", { name: meta?.label ?? id })}
-                      >
-                        {t("common.remove")}
-                      </button>
+                      <span className="pr-actions">
+                        <TimeframeSelect
+                          value={ref.timeframe}
+                          options={supported}
+                          onChange={(tf) => changeTimeframe(index, tf)}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeIndicator(index)}
+                          className="pr-remove"
+                          aria-label={t("comboEditor.removeIndicator", {
+                            name: meta?.label ?? ref.indicatorId,
+                          })}
+                        >
+                          {t("common.remove")}
+                        </button>
+                      </span>
                     </div>
                   );
                 })}
@@ -165,7 +235,7 @@ export function ComboEditorModal({
               <div style={{ marginTop: 10 }}>
                 <IndicatorPickerInline
                   marketplace={marketplace}
-                  excludeIds={new Set(indicatorIds)}
+                  excludeIds={fullyUsedIds}
                   onPick={addIndicator}
                 />
               </div>
@@ -212,6 +282,102 @@ export function ComboEditorModal({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Themed timeframe dropdown — replaces the native <select>, whose popup ignores
+ * the app's dark monochrome palette. Renders a static label when only one
+ * timeframe is supported (market indicators are daily-only).
+ */
+function TimeframeSelect({
+  value,
+  options,
+  onChange,
+}: {
+  value: Timeframe;
+  options: Timeframe[];
+  onChange: (tf: Timeframe) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        // Capture phase + stopImmediatePropagation so Escape closes the menu
+        // without also closing the parent modal.
+        e.stopImmediatePropagation();
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey, true);
+    };
+  }, [open]);
+
+  if (options.length <= 1) {
+    return (
+      <span
+        className="pr-tf-static"
+        title="Market indicators are daily only"
+        data-testid="combo-indicator-tf"
+      >
+        {TIMEFRAME_LABELS[value]}
+      </span>
+    );
+  }
+
+  return (
+    <div className="tf-select" ref={ref}>
+      <button
+        type="button"
+        className="tf-select-btn"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        data-testid="combo-indicator-tf"
+      >
+        {TIMEFRAME_LABELS[value]}
+        <span className="chev" aria-hidden>
+          ▾
+        </span>
+      </button>
+      {open && (
+        <div className="tf-menu" role="listbox">
+          {options.map((tf) => (
+            <button
+              key={tf}
+              type="button"
+              role="option"
+              aria-selected={tf === value}
+              className={tf === value ? "active" : ""}
+              onClick={() => {
+                onChange(tf);
+                setOpen(false);
+              }}
+              data-testid={`combo-tf-option-${tf}`}
+            >
+              {TIMEFRAME_LABELS[tf]}
+              {tf === value && (
+                <span className="tick" aria-hidden>
+                  ✓
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

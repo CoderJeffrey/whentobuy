@@ -10,15 +10,23 @@ import {
   type Time,
   type UTCTimestamp,
 } from "lightweight-charts";
-import type { PriceBar, SmaPoint } from "../types";
+import {
+  TIMEFRAMES,
+  TIMEFRAME_LABELS,
+  type PriceChart as PriceChartData,
+  type Timeframe,
+} from "../types";
 
-type Timeframe = "1M" | "6M" | "1Y" | "3Y";
-const TIMEFRAMES: Timeframe[] = ["1M", "6M", "1Y", "3Y"];
+type Range = "1M" | "6M" | "1Y" | "3Y";
+const RANGES: Range[] = ["1M", "6M", "1Y", "3Y"];
 
-function daysBack(tf: Timeframe): number {
-  if (tf === "1M") return 31;
-  if (tf === "6M") return 183;
-  if (tf === "1Y") return 365;
+const TF_KEY = "chart_timeframe";
+const RANGE_KEY = "chart_range";
+
+function daysBack(r: Range): number {
+  if (r === "1M") return 31;
+  if (r === "6M") return 183;
+  if (r === "1Y") return 365;
   return 365 * 3 + 5;
 }
 
@@ -26,38 +34,52 @@ function toUtc(dateIso: string): UTCTimestamp {
   return (new Date(`${dateIso}T00:00:00Z`).getTime() / 1000) as UTCTimestamp;
 }
 
-export function PriceChart({
-  priceHistory,
-  sma200Series,
-}: {
-  priceHistory: PriceBar[];
-  sma200Series: SmaPoint[];
-}) {
+function loadTimeframe(): Timeframe {
+  const v = localStorage.getItem(TF_KEY);
+  return v === "weekly" || v === "monthly" || v === "daily" ? v : "daily";
+}
+
+function loadRange(): Range {
+  const v = localStorage.getItem(RANGE_KEY);
+  return RANGES.includes(v as Range) ? (v as Range) : "6M";
+}
+
+export function PriceChart({ priceChart }: { priceChart: PriceChartData }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const smaSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
-  const [timeframe, setTimeframe] = useState<Timeframe>("6M");
+  const [timeframe, setTimeframe] = useState<Timeframe>(loadTimeframe);
+  const [range, setRange] = useState<Range>(loadRange);
+
+  useEffect(() => {
+    localStorage.setItem(TF_KEY, timeframe);
+  }, [timeframe]);
+  useEffect(() => {
+    localStorage.setItem(RANGE_KEY, range);
+  }, [range]);
+
+  const series = priceChart[timeframe];
 
   const candles: CandlestickData<Time>[] = useMemo(
     () =>
-      priceHistory.map((p) => ({
+      series.bars.map((p) => ({
         time: toUtc(p.date),
         open: p.open,
         high: p.high,
         low: p.low,
         close: p.close,
       })),
-    [priceHistory],
+    [series],
   );
 
   const smaLine: LineData<Time>[] = useMemo(
     () =>
-      sma200Series.map((s) => ({
+      series.sma200.map((s) => ({
         time: toUtc(s.date),
         value: s.value,
       })),
-    [sma200Series],
+    [series],
   );
 
   useEffect(() => {
@@ -113,39 +135,60 @@ export function PriceChart({
   useEffect(() => {
     if (!chartRef.current || !candleSeriesRef.current || !smaSeriesRef.current)
       return;
-    if (candles.length === 0) return;
     candleSeriesRef.current.setData(candles);
     smaSeriesRef.current.setData(smaLine);
+    if (candles.length === 0) return;
 
     const lastTime = candles[candles.length - 1]!.time as UTCTimestamp;
-    const secondsBack = daysBack(timeframe) * 86400;
+    const secondsBack = daysBack(range) * 86400;
     const fromTime = (Number(lastTime) - secondsBack) as UTCTimestamp;
     chartRef.current.timeScale().setVisibleRange({
       from: fromTime,
       to: lastTime,
     });
-  }, [candles, smaLine, timeframe]);
+  }, [candles, smaLine, range]);
+
+  const empty = series.bars.length === 0;
 
   return (
     <div className="card chart-card">
       <div className="card-head">
-        <span className="card-title">Price history · daily</span>
-        <div className="timeframes" role="tablist">
-          {TIMEFRAMES.map((tf) => {
-            const active = tf === timeframe;
-            return (
-              <button
-                key={tf}
-                data-testid={`tf-${tf}`}
-                data-active={active}
-                type="button"
-                onClick={() => setTimeframe(tf)}
-                className={active ? "active" : ""}
-              >
-                {tf}
-              </button>
-            );
-          })}
+        <span className="card-title">Price History</span>
+        <div className="chart-controls">
+          <div className="timeframes" role="tablist" data-testid="chart-tf">
+            {TIMEFRAMES.map((tf) => {
+              const active = tf === timeframe;
+              return (
+                <button
+                  key={tf}
+                  data-testid={`tf-bar-${tf}`}
+                  data-active={active}
+                  type="button"
+                  onClick={() => setTimeframe(tf)}
+                  className={active ? "active" : ""}
+                >
+                  {TIMEFRAME_LABELS[tf]}
+                </button>
+              );
+            })}
+          </div>
+          <div className="timeframes" role="tablist" data-testid="chart-range">
+            {RANGES.map((r) => {
+              const active = r === range;
+              return (
+                <button
+                  key={r}
+                  data-testid={`tf-${r}`}
+                  data-active={active}
+                  type="button"
+                  onClick={() => setRange(r)}
+                  className={active ? "active" : ""}
+                >
+                  {r}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
       <div className="chart-wrap">
@@ -154,6 +197,11 @@ export function PriceChart({
           data-testid="price-chart"
           className="chart-canvas"
         />
+        {empty && (
+          <div className="chart-empty" data-testid="chart-empty">
+            {TIMEFRAME_LABELS[timeframe]} data unavailable
+          </div>
+        )}
       </div>
     </div>
   );

@@ -65,20 +65,24 @@ async function migrate(conn: DuckDBConnection): Promise<void> {
   }
 
   // ── prices ─────────────────────────────────────────────────────────────
-  await conn.run(`
-    CREATE TABLE IF NOT EXISTS prices (
-      ticker    VARCHAR NOT NULL,
-      exchange  VARCHAR NOT NULL,
-      date      DATE NOT NULL,
-      open      DOUBLE NOT NULL,
-      high      DOUBLE NOT NULL,
-      low       DOUBLE NOT NULL,
-      close     DOUBLE NOT NULL,
-      adj_close DOUBLE NOT NULL,
-      volume    BIGINT NOT NULL,
-      PRIMARY KEY (ticker, exchange, date)
-    );
-  `);
+  // Daily is the original table; weekly/monthly (v27) mirror its shape exactly
+  // and are queried directly for their respective chart/indicator timeframes.
+  for (const table of ["prices", "prices_weekly", "prices_monthly"]) {
+    await conn.run(`
+      CREATE TABLE IF NOT EXISTS ${table} (
+        ticker    VARCHAR NOT NULL,
+        exchange  VARCHAR NOT NULL,
+        date      DATE NOT NULL,
+        open      DOUBLE NOT NULL,
+        high      DOUBLE NOT NULL,
+        low       DOUBLE NOT NULL,
+        close     DOUBLE NOT NULL,
+        adj_close DOUBLE NOT NULL,
+        volume    BIGINT NOT NULL,
+        PRIMARY KEY (ticker, exchange, date)
+      );
+    `);
+  }
   {
     const cols = await getColumns(conn, "prices");
     if (!cols.has("exchange")) {
@@ -123,6 +127,27 @@ async function migrate(conn: DuckDBConnection): Promise<void> {
       PRIMARY KEY (ticker, exchange, date)
     );
   `);
+  // Weekly/monthly indicator tables (v27) mirror the daily `indicators` shape.
+  for (const table of ["indicators_weekly", "indicators_monthly"]) {
+    await conn.run(`
+      CREATE TABLE IF NOT EXISTS ${table} (
+        ticker           VARCHAR NOT NULL,
+        exchange         VARCHAR NOT NULL,
+        date             DATE NOT NULL,
+        rsi_14           DOUBLE,
+        sma_20           DOUBLE,
+        sma_50           DOUBLE,
+        sma_200          DOUBLE,
+        macd             DOUBLE,
+        macd_signal      DOUBLE,
+        macd_cross_up    BOOLEAN,
+        bb_lower         DOUBLE,
+        pct_from_52w_low DOUBLE,
+        volume_avg_20    DOUBLE,
+        PRIMARY KEY (ticker, exchange, date)
+      );
+    `);
+  }
   {
     const cols = await getColumns(conn, "indicators");
     if (!cols.has("exchange")) {
@@ -153,29 +178,51 @@ async function migrate(conn: DuckDBConnection): Promise<void> {
   }
 
   // ── ticker_cache ───────────────────────────────────────────────────────
+  // v27 tracks freshness per timeframe so a partial failure (e.g. weekly gap
+  // for an A-share) doesn't poison the daily cache.
   await conn.run(`
     CREATE TABLE IF NOT EXISTS ticker_cache (
       ticker          VARCHAR NOT NULL,
       exchange        VARCHAR NOT NULL,
+      timeframe       VARCHAR NOT NULL,
       last_fetched_at TIMESTAMP NOT NULL,
       status          VARCHAR NOT NULL,
-      PRIMARY KEY (ticker, exchange)
+      PRIMARY KEY (ticker, exchange, timeframe)
     );
   `);
   {
     const cols = await getColumns(conn, "ticker_cache");
     if (!cols.has("exchange")) {
+      // Legacy ticker-only PK → qualify as exchange='US', timeframe='daily'.
       await conn.run(`
         CREATE TABLE ticker_cache_new (
           ticker          VARCHAR NOT NULL,
           exchange        VARCHAR NOT NULL,
+          timeframe       VARCHAR NOT NULL,
           last_fetched_at TIMESTAMP NOT NULL,
           status          VARCHAR NOT NULL,
-          PRIMARY KEY (ticker, exchange)
+          PRIMARY KEY (ticker, exchange, timeframe)
         );
       `);
       await conn.run(
-        `INSERT INTO ticker_cache_new SELECT ticker, 'US', last_fetched_at, status FROM ticker_cache`,
+        `INSERT INTO ticker_cache_new SELECT ticker, 'US', 'daily', last_fetched_at, status FROM ticker_cache`,
+      );
+      await conn.run("DROP TABLE ticker_cache");
+      await conn.run("ALTER TABLE ticker_cache_new RENAME TO ticker_cache");
+    } else if (!cols.has("timeframe")) {
+      // Had (ticker, exchange) PK from v21 → existing rows become daily.
+      await conn.run(`
+        CREATE TABLE ticker_cache_new (
+          ticker          VARCHAR NOT NULL,
+          exchange        VARCHAR NOT NULL,
+          timeframe       VARCHAR NOT NULL,
+          last_fetched_at TIMESTAMP NOT NULL,
+          status          VARCHAR NOT NULL,
+          PRIMARY KEY (ticker, exchange, timeframe)
+        );
+      `);
+      await conn.run(
+        `INSERT INTO ticker_cache_new SELECT ticker, exchange, 'daily', last_fetched_at, status FROM ticker_cache`,
       );
       await conn.run("DROP TABLE ticker_cache");
       await conn.run("ALTER TABLE ticker_cache_new RENAME TO ticker_cache");
@@ -192,12 +239,16 @@ async function migrate(conn: DuckDBConnection): Promise<void> {
     );
   `);
 
-  await conn.run(
-    "CREATE INDEX IF NOT EXISTS idx_prices_ticker ON prices(ticker, exchange)",
-  );
-  await conn.run(
-    "CREATE INDEX IF NOT EXISTS idx_indicators_ticker ON indicators(ticker, exchange)",
-  );
+  for (const table of ["prices", "prices_weekly", "prices_monthly"]) {
+    await conn.run(
+      `CREATE INDEX IF NOT EXISTS idx_${table}_ticker ON ${table}(ticker, exchange)`,
+    );
+  }
+  for (const table of ["indicators", "indicators_weekly", "indicators_monthly"]) {
+    await conn.run(
+      `CREATE INDEX IF NOT EXISTS idx_${table}_ticker ON ${table}(ticker, exchange)`,
+    );
+  }
 }
 
 export async function closeDb(): Promise<void> {

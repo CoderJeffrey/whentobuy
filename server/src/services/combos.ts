@@ -1,8 +1,19 @@
 import type { EvalContext } from "../eval-context.js";
-import { INDICATOR_REGISTRY, isIndicatorId } from "../indicator-registry.js";
+import {
+  INDICATOR_REGISTRY,
+  isIndicatorId,
+  supportedTimeframesForId,
+} from "../indicator-registry.js";
 import { getSupabaseAdmin } from "../supabase.js";
 import { getTodayMarketData } from "./market-data.js";
-import type { Combo, ComboStatus, IndicatorId } from "../types.js";
+import {
+  TIMEFRAMES,
+  type Combo,
+  type ComboIndicatorRef,
+  type ComboStatus,
+  type IndicatorId,
+  type Timeframe,
+} from "../types.js";
 
 export const MAX_COMBOS_PER_USER = 5;
 
@@ -35,6 +46,7 @@ interface ComboRow {
 interface ComboIndicatorRow {
   combo_id: string;
   indicator_id: string;
+  timeframe: string;
 }
 
 function sanitizeName(raw: unknown): string {
@@ -47,22 +59,52 @@ function sanitizeName(raw: unknown): string {
   return trimmed;
 }
 
-function sanitizeIndicatorIds(raw: unknown): IndicatorId[] {
-  if (!Array.isArray(raw)) {
-    throw new ComboError("indicatorIds must be an array");
+export function sanitizeTimeframe(
+  raw: unknown,
+  indicatorId: IndicatorId,
+): Timeframe {
+  const value = raw == null ? "daily" : raw;
+  if (typeof value !== "string" || !(TIMEFRAMES as string[]).includes(value)) {
+    throw new ComboError(`invalid timeframe: ${String(raw)}`);
   }
-  const out: IndicatorId[] = [];
+  const tf = value as Timeframe;
+  if (!supportedTimeframesForId(indicatorId).includes(tf)) {
+    throw new ComboError(`${indicatorId} does not support ${tf} timeframe`);
+  }
+  return tf;
+}
+
+/**
+ * Accepts either the v27 `{ indicatorId, timeframe }` objects or a legacy plain
+ * id string (treated as daily). Dedupes on (indicator, timeframe) so the same
+ * indicator can appear at two timeframes but not twice at one.
+ */
+function sanitizeIndicators(raw: unknown): ComboIndicatorRef[] {
+  if (!Array.isArray(raw)) {
+    throw new ComboError("indicators must be an array");
+  }
+  const out: ComboIndicatorRef[] = [];
   const seen = new Set<string>();
   for (const v of raw) {
-    if (typeof v !== "string") {
-      throw new ComboError(`invalid indicator id: ${String(v)}`);
+    let indicatorId: unknown;
+    let timeframeRaw: unknown;
+    if (typeof v === "string") {
+      indicatorId = v;
+      timeframeRaw = "daily";
+    } else if (v && typeof v === "object") {
+      indicatorId = (v as { indicatorId?: unknown }).indicatorId;
+      timeframeRaw = (v as { timeframe?: unknown }).timeframe;
+    } else {
+      throw new ComboError(`invalid indicator: ${String(v)}`);
     }
-    if (!isIndicatorId(v)) {
-      throw new ComboError(`unknown indicator id: ${v}`);
+    if (typeof indicatorId !== "string" || !isIndicatorId(indicatorId)) {
+      throw new ComboError(`unknown indicator id: ${String(indicatorId)}`);
     }
-    if (!seen.has(v)) {
-      seen.add(v);
-      out.push(v);
+    const timeframe = sanitizeTimeframe(timeframeRaw, indicatorId);
+    const key = `${indicatorId}:${timeframe}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      out.push({ indicatorId, timeframe });
     }
   }
   return out;
@@ -84,7 +126,7 @@ export async function listCombos(userId: string): Promise<Combo[]> {
   const ids = combos.map((c) => c.id);
   const { data: indRows, error: indErr } = await supabase
     .from("combo_indicators")
-    .select("combo_id, indicator_id")
+    .select("combo_id, indicator_id, timeframe")
     .in("combo_id", ids);
   if (indErr) {
     throw new ComboError(
@@ -92,17 +134,24 @@ export async function listCombos(userId: string): Promise<Combo[]> {
       500,
     );
   }
-  const byCombo = new Map<string, IndicatorId[]>();
+  const byCombo = new Map<string, ComboIndicatorRef[]>();
   for (const r of (indRows ?? []) as ComboIndicatorRow[]) {
     const list = byCombo.get(r.combo_id) ?? [];
-    list.push(r.indicator_id);
+    list.push({
+      indicatorId: r.indicator_id,
+      timeframe: (r.timeframe as Timeframe) ?? "daily",
+    });
     byCombo.set(r.combo_id, list);
   }
 
   return combos.map((c) => ({
     id: c.id,
     name: c.name,
-    indicatorIds: (byCombo.get(c.id) ?? []).sort((a, b) => a.localeCompare(b)),
+    indicators: (byCombo.get(c.id) ?? []).sort(
+      (a, b) =>
+        a.indicatorId.localeCompare(b.indicatorId) ||
+        a.timeframe.localeCompare(b.timeframe),
+    ),
     createdAt: c.created_at,
     updatedAt: c.updated_at,
   }));
@@ -140,11 +189,11 @@ async function loadOwnedCombo(
 
 export async function createCombo(
   userId: string,
-  input: { name: unknown; indicatorIds: unknown },
+  input: { name: unknown; indicators: unknown },
 ): Promise<Combo> {
   const name = sanitizeName(input.name);
-  const indicatorIds = sanitizeIndicatorIds(input.indicatorIds);
-  if (indicatorIds.length === 0) {
+  const indicators = sanitizeIndicators(input.indicators);
+  if (indicators.length === 0) {
     throw new ComboError("a combo must have at least one indicator");
   }
 
@@ -174,9 +223,10 @@ export async function createCombo(
   const { error: indErr } = await supabase
     .from("combo_indicators")
     .insert(
-      indicatorIds.map((indicator_id) => ({
+      indicators.map((ref) => ({
         combo_id: created.id,
-        indicator_id,
+        indicator_id: ref.indicatorId,
+        timeframe: ref.timeframe,
       })),
     );
   if (indErr) {
@@ -190,7 +240,11 @@ export async function createCombo(
   return {
     id: created.id,
     name: created.name,
-    indicatorIds: [...indicatorIds].sort((a, b) => a.localeCompare(b)),
+    indicators: [...indicators].sort(
+      (a, b) =>
+        a.indicatorId.localeCompare(b.indicatorId) ||
+        a.timeframe.localeCompare(b.timeframe),
+    ),
     createdAt: created.created_at,
     updatedAt: created.updated_at,
   };
@@ -199,7 +253,7 @@ export async function createCombo(
 export async function updateCombo(
   userId: string,
   comboId: string,
-  input: { name?: unknown; indicatorIds?: unknown },
+  input: { name?: unknown; indicators?: unknown },
 ): Promise<Combo> {
   await loadOwnedCombo(userId, comboId);
   const supabase = getSupabaseAdmin();
@@ -216,9 +270,9 @@ export async function updateCombo(
     }
   }
 
-  if (input.indicatorIds !== undefined) {
-    const ids = sanitizeIndicatorIds(input.indicatorIds);
-    if (ids.length === 0) {
+  if (input.indicators !== undefined) {
+    const refs = sanitizeIndicators(input.indicators);
+    if (refs.length === 0) {
       throw new ComboError("a combo must have at least one indicator");
     }
     const { error: delErr } = await supabase
@@ -231,9 +285,13 @@ export async function updateCombo(
         500,
       );
     }
-    const { error: insErr } = await supabase
-      .from("combo_indicators")
-      .insert(ids.map((indicator_id) => ({ combo_id: comboId, indicator_id })));
+    const { error: insErr } = await supabase.from("combo_indicators").insert(
+      refs.map((ref) => ({
+        combo_id: comboId,
+        indicator_id: ref.indicatorId,
+        timeframe: ref.timeframe,
+      })),
+    );
     if (insErr) {
       throw new ComboError(
         `failed to update combo indicators: ${insErr.message}`,
@@ -270,17 +328,19 @@ export async function addIndicatorToCombo(
   userId: string,
   comboId: string,
   indicatorId: unknown,
+  timeframe: unknown,
 ): Promise<Combo> {
   await loadOwnedCombo(userId, comboId);
   if (typeof indicatorId !== "string" || !isIndicatorId(indicatorId)) {
     throw new ComboError(`unknown indicator id: ${String(indicatorId)}`);
   }
+  const tf = sanitizeTimeframe(timeframe, indicatorId);
   const supabase = getSupabaseAdmin();
   const { error } = await supabase
     .from("combo_indicators")
     .upsert(
-      { combo_id: comboId, indicator_id: indicatorId },
-      { onConflict: "combo_id,indicator_id", ignoreDuplicates: true },
+      { combo_id: comboId, indicator_id: indicatorId, timeframe: tf },
+      { onConflict: "combo_id,indicator_id,timeframe", ignoreDuplicates: true },
     );
   if (error) {
     throw new ComboError(
@@ -303,6 +363,7 @@ export async function removeIndicatorFromCombo(
   userId: string,
   comboId: string,
   indicatorId: string,
+  timeframe?: string,
 ): Promise<Combo> {
   await loadOwnedCombo(userId, comboId);
   const supabase = getSupabaseAdmin();
@@ -321,11 +382,15 @@ export async function removeIndicatorFromCombo(
     throw new ComboError("a combo must have at least one indicator");
   }
 
-  const { error } = await supabase
+  let del = supabase
     .from("combo_indicators")
     .delete()
     .eq("combo_id", comboId)
     .eq("indicator_id", indicatorId);
+  // A specific timeframe targets one instance; omitting it removes every
+  // timeframe variant of the indicator.
+  if (timeframe != null) del = del.eq("timeframe", timeframe);
+  const { error } = await del;
   if (error) {
     throw new ComboError(
       `failed to remove indicator: ${error.message}`,
@@ -365,6 +430,7 @@ export async function ensureUserHasCombo(userId: string): Promise<void> {
       DEFAULT_COMBO_INDICATORS.map((indicator_id) => ({
         combo_id: data.id,
         indicator_id,
+        timeframe: "daily",
       })),
     );
   if (insErr) {
@@ -375,34 +441,50 @@ export async function ensureUserHasCombo(userId: string): Promise<void> {
 }
 
 /**
- * Evaluate every combo for the given EvalContext. A combo is green iff every
- * indicator inside it triggers. Empty combos are treated as not-green.
+ * Evaluate every combo against per-timeframe EvalContexts. Each combo indicator
+ * is resolved against the context for its chosen timeframe; a combo is green iff
+ * every indicator triggers. If a timeframe has no data (e.g. weekly backfill
+ * failed or is still in flight), that indicator reports "Data unavailable" and
+ * cannot trigger, so the combo can't be green.
  *
  * Market-wide indicators read today's `market_data` (fetched once, then cached
- * for the rest of the day); per-stock indicators ignore it.
+ * for the rest of the day) and are daily-only by registry constraint.
  */
 export async function evaluateCombos(
   combos: Combo[],
-  ctx: EvalContext,
+  ctxByTimeframe: Record<Timeframe, EvalContext | null>,
 ): Promise<ComboStatus[]> {
   const marketData = await getTodayMarketData();
   return combos.map((combo) => {
-    const indicators = combo.indicatorIds.map((id) => {
-      const def = INDICATOR_REGISTRY[id];
+    const indicators = combo.indicators.map((ref) => {
+      const def = INDICATOR_REGISTRY[ref.indicatorId];
       if (!def) {
         return {
-          indicatorId: id,
-          label: id,
+          indicatorId: ref.indicatorId,
+          label: ref.indicatorId,
           abbreviation: "",
+          timeframe: ref.timeframe,
           triggered: false,
           displayValue: "unknown",
         };
       }
+      const ctx = ctxByTimeframe[ref.timeframe];
+      if (!ctx) {
+        return {
+          indicatorId: ref.indicatorId,
+          label: def.label,
+          abbreviation: def.abbreviation,
+          timeframe: ref.timeframe,
+          triggered: false,
+          displayValue: "Data unavailable",
+        };
+      }
       const { triggered, displayValue } = def.evaluate(ctx, marketData);
       return {
-        indicatorId: id,
+        indicatorId: ref.indicatorId,
         label: def.label,
         abbreviation: def.abbreviation,
+        timeframe: ref.timeframe,
         triggered,
         displayValue,
       };

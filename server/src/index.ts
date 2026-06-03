@@ -14,7 +14,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import cors from "cors";
 import express from "express";
-import { buildEvalContext } from "./eval-context.js";
 import { startDailyJob } from "./cron/scheduler.js";
 import { requireAuth, type AuthedRequest } from "./middleware/auth.js";
 import {
@@ -49,11 +48,13 @@ import {
   searchSecurities,
 } from "./services/securities.js";
 import { currencyFor, formatSymbol, parseSymbol } from "./lib/symbol.js";
+import {
+  ctxByTimeframe,
+  loadTimeframeData,
+  toPriceChart,
+} from "./services/timeframe-data.js";
 import type {
   DashboardResponse,
-  PriceBar,
-  PriceRow,
-  SmaPoint,
   WatchlistItem as WatchlistDisplayItem,
   WatchlistResponse,
 } from "./types.js";
@@ -77,23 +78,6 @@ import {
 
 const PORT = Number(process.env.PORT ?? 3001);
 
-function toIsoDate(value: unknown): string {
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
-  if (typeof value === "string") return value.slice(0, 10);
-  if (value && typeof value === "object" && "days" in (value as object)) {
-    const days = Number((value as { days: number }).days);
-    return new Date(days * 86400_000).toISOString().slice(0, 10);
-  }
-  throw new Error(`cannot convert to ISO date: ${String(value)}`);
-}
-
-function asNumber(v: unknown): number {
-  if (typeof v === "number") return v;
-  if (typeof v === "bigint") return Number(v);
-  if (typeof v === "string") return Number(v);
-  throw new Error(`cannot convert to number: ${String(v)}`);
-}
-
 function sqlLit(s: string): string {
   return `'${s.replace(/'/g, "''")}'`;
 }
@@ -108,51 +92,23 @@ async function buildDashboard(
   const symbol = formatSymbol(ticker, exchange);
   await ensureTickerData(ticker, exchange);
 
-  const db = await getDb();
   const security = await getSecurity(ticker, exchange);
 
-  const priceReader = await db.runAndReadAll(
-    `SELECT date, open, high, low, close, adj_close, volume FROM prices WHERE ticker = ${sqlLit(ticker)} AND exchange = ${sqlLit(exchange)} ORDER BY date ASC`,
-  );
-  const priceRows = priceReader.getRowObjectsJS();
-
-  if (priceRows.length === 0) {
+  const data = await loadTimeframeData(ticker, exchange);
+  const daily = data.daily;
+  if (!daily || daily.bars.length === 0) {
     throw new TickerNotFoundError(ticker);
   }
 
-  const priceHistory: PriceBar[] = priceRows.map((r) => ({
-    date: toIsoDate(r.date),
-    open: asNumber(r.open),
-    high: asNumber(r.high),
-    low: asNumber(r.low),
-    close: asNumber(r.close),
-    volume: asNumber(r.volume),
-  }));
-
+  const priceHistory = daily.bars;
   const latest = priceHistory[priceHistory.length - 1]!;
   const prev = priceHistory[priceHistory.length - 2];
 
   const priceChange = prev ? latest.close - prev.close : 0;
   const priceChangePct = prev ? (priceChange / prev.close) * 100 : 0;
 
-  const priceRowsForCtx: PriceRow[] = priceHistory.map((p) => ({
-    date: p.date,
-    open: p.open,
-    high: p.high,
-    low: p.low,
-    close: p.close,
-    volume: p.volume,
-  }));
-  const ctx = buildEvalContext(priceRowsForCtx);
-
-  const sma200Series: SmaPoint[] = ctx.sma200
-    .map((v, i) =>
-      v == null ? null : { date: priceHistory[i]!.date, value: v },
-    )
-    .filter((p): p is SmaPoint => p != null);
-
   const combos = await listCombos(userId);
-  const comboStatuses = await evaluateCombos(combos, ctx);
+  const comboStatuses = await evaluateCombos(combos, ctxByTimeframe(data));
   const anyGreen = comboStatuses.some((c) => c.green);
 
   return {
@@ -169,7 +125,8 @@ async function buildDashboard(
     combos: comboStatuses,
     anyGreen,
     priceHistory,
-    sma200Series,
+    sma200Series: daily.sma200,
+    priceChart: toPriceChart(data),
   };
 }
 
@@ -179,7 +136,7 @@ async function isTickerDataReady(
 ): Promise<boolean> {
   const db = await getDb();
   const reader = await db.runAndReadAll(
-    `SELECT status FROM ticker_cache WHERE ticker = ${sqlLit(ticker)} AND exchange = ${sqlLit(exchange)}`,
+    `SELECT status FROM ticker_cache WHERE ticker = ${sqlLit(ticker)} AND exchange = ${sqlLit(exchange)} AND timeframe = 'daily'`,
   );
   const rows = reader.getRowObjectsJS();
   return rows.length > 0 && rows[0]!.status === "ok";
@@ -206,33 +163,20 @@ async function getWatchlistDisplayItem(
     return { ...base, dataReady: false, totalCombos };
   }
 
-  const db = await getDb();
-  const priceReader = await db.runAndReadAll(
-    `SELECT date, open, high, low, close, volume FROM prices
-     WHERE ticker = ${sqlLit(ticker)} AND exchange = ${sqlLit(exchange)}
-     ORDER BY date ASC`,
-  );
-  const priceRows = priceReader.getRowObjectsJS();
-  if (priceRows.length === 0) {
+  const data = await loadTimeframeData(ticker, exchange);
+  const daily = data.daily;
+  if (!daily || daily.bars.length === 0) {
     return { ...base, dataReady: false, totalCombos };
   }
 
-  const prices: PriceRow[] = priceRows.map((r) => ({
-    date: toIsoDate(r.date),
-    open: asNumber(r.open),
-    high: asNumber(r.high),
-    low: asNumber(r.low),
-    close: asNumber(r.close),
-    volume: asNumber(r.volume),
-  }));
-  const latest = prices[prices.length - 1]!;
-  const prev = prices[prices.length - 2];
+  const bars = daily.bars;
+  const latest = bars[bars.length - 1]!;
+  const prev = bars[bars.length - 2];
   const priceChangePct = prev
     ? ((latest.close - prev.close) / prev.close) * 100
     : 0;
 
-  const ctx = buildEvalContext(prices);
-  const statuses = await evaluateCombos(combosForUser, ctx);
+  const statuses = await evaluateCombos(combosForUser, ctxByTimeframe(data));
   const greenComboCount = statuses.filter((s) => s.green).length;
 
   return {
@@ -479,10 +423,14 @@ app.get("/api/combos", async (req: AuthedRequest, res) => {
 
 app.post("/api/combos", async (req: AuthedRequest, res) => {
   try {
-    const body = (req.body ?? {}) as { name?: unknown; indicatorIds?: unknown };
+    const body = (req.body ?? {}) as {
+      name?: unknown;
+      indicators?: unknown;
+      indicatorIds?: unknown;
+    };
     const combo = await createCombo(req.user!.id, {
       name: body.name,
-      indicatorIds: body.indicatorIds,
+      indicators: body.indicators ?? body.indicatorIds,
     });
     res.json({ combo });
   } catch (err) {
@@ -499,8 +447,15 @@ app.patch("/api/combos/:id", async (req: AuthedRequest, res) => {
       res.status(400).json({ error: "missing id" });
       return;
     }
-    const body = (req.body ?? {}) as { name?: unknown; indicatorIds?: unknown };
-    const combo = await updateCombo(req.user!.id, id, body);
+    const body = (req.body ?? {}) as {
+      name?: unknown;
+      indicators?: unknown;
+      indicatorIds?: unknown;
+    };
+    const combo = await updateCombo(req.user!.id, id, {
+      name: body.name,
+      indicators: body.indicators ?? body.indicatorIds,
+    });
     res.json({ combo });
   } catch (err) {
     if (sendComboError(res, err)) return;
@@ -532,8 +487,16 @@ app.post("/api/combos/:id/indicators", async (req: AuthedRequest, res) => {
       res.status(400).json({ error: "missing id" });
       return;
     }
-    const body = (req.body ?? {}) as { indicatorId?: unknown };
-    const combo = await addIndicatorToCombo(req.user!.id, id, body.indicatorId);
+    const body = (req.body ?? {}) as {
+      indicatorId?: unknown;
+      timeframe?: unknown;
+    };
+    const combo = await addIndicatorToCombo(
+      req.user!.id,
+      id,
+      body.indicatorId,
+      body.timeframe,
+    );
     res.json({ combo });
   } catch (err) {
     if (sendComboError(res, err)) return;
@@ -552,7 +515,16 @@ app.delete(
         res.status(400).json({ error: "missing id" });
         return;
       }
-      const combo = await removeIndicatorFromCombo(req.user!.id, id, indId);
+      const timeframe =
+        typeof req.query.timeframe === "string"
+          ? req.query.timeframe
+          : undefined;
+      const combo = await removeIndicatorFromCombo(
+        req.user!.id,
+        id,
+        indId,
+        timeframe,
+      );
       res.json({ combo });
     } catch (err) {
       if (sendComboError(res, err)) return;
