@@ -54,6 +54,7 @@ export interface EvalContext {
   i: number;
 
   // OHLCV (length n)
+  dates: string[];
   opens: number[];
   highs: number[];
   lows: number[];
@@ -63,6 +64,12 @@ export interface EvalContext {
   // Price-derived
   pctFrom52wLow: Series;
   pctFrom52wHigh: Series;
+  /** Trailing year-to-date low (min low since Jan 1 of the bar's year). */
+  ytdLow: Series;
+  /** 1-based touch-episode number when the bar's low is within 5% of the YTD low; episodes split by >10 calendar days between touches. */
+  ytdLowTouchEpisode: Series;
+  /** True on the year's first bar whose range intersects the SMA-200 ±5% band. */
+  sma200FirstTouch: Series<boolean>;
 
   // Momentum
   rsi14: Series;
@@ -162,6 +169,80 @@ function rollingAvg(series: Series, period: number): Series {
       count++;
     }
     if (count > 0) out[i] = sum / count;
+  }
+  return out;
+}
+
+const TOUCH_BAND_PCT = 0.05;
+const YTD_TOUCH_EPISODE_GAP_DAYS = 10;
+
+function calendarDaysBetween(a: string, b: string): number {
+  return Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);
+}
+
+function ytdLowTouchSeries(
+  dates: string[],
+  lows: number[],
+): { ytdLow: Series; episode: Series } {
+  const n = dates.length;
+  const ytdLow: Series = new Array<number | null>(n).fill(null);
+  const episode: Series = new Array<number | null>(n).fill(null);
+  let year = "";
+  let low = Infinity;
+  let episodes = 0;
+  let lastTouchDate: string | null = null;
+  for (let i = 0; i < n; i++) {
+    const y = dates[i]!.slice(0, 4);
+    if (y !== year) {
+      year = y;
+      low = Infinity;
+      episodes = 0;
+      lastTouchDate = null;
+    }
+    low = Math.min(low, lows[i]!);
+    ytdLow[i] = low;
+    // Trailing low never exceeds the bar's low, so only the band top can bind.
+    if (lows[i]! <= low * (1 + TOUCH_BAND_PCT)) {
+      if (
+        lastTouchDate == null ||
+        calendarDaysBetween(lastTouchDate, dates[i]!) >
+          YTD_TOUCH_EPISODE_GAP_DAYS
+      ) {
+        episodes++;
+      }
+      episode[i] = episodes;
+      lastTouchDate = dates[i]!;
+    }
+  }
+  return { ytdLow, episode };
+}
+
+function sma200FirstTouchSeries(
+  dates: string[],
+  highs: number[],
+  lows: number[],
+  sma200: Series,
+): Series<boolean> {
+  const n = dates.length;
+  const out: Series<boolean> = new Array<boolean | null>(n).fill(null);
+  let year = "";
+  let touched = false;
+  for (let i = 0; i < n; i++) {
+    const y = dates[i]!.slice(0, 4);
+    if (y !== year) {
+      year = y;
+      touched = false;
+    }
+    const sma = sma200[i];
+    if (sma == null) {
+      out[i] = false;
+      continue;
+    }
+    const touch =
+      lows[i]! <= sma * (1 + TOUCH_BAND_PCT) &&
+      highs[i]! >= sma * (1 - TOUCH_BAND_PCT);
+    out[i] = touch && !touched;
+    if (touch) touched = true;
   }
   return out;
 }
@@ -454,6 +535,7 @@ function checkPatternRecent(
 
 export function buildEvalContext(prices: PriceRow[]): EvalContext {
   const n = prices.length;
+  const dates = prices.map((p) => p.date);
   const opens = prices.map((p) => p.open);
   const highs = prices.map((p) => p.high);
   const lows = prices.map((p) => p.low);
@@ -474,6 +556,11 @@ export function buildEvalContext(prices: PriceRow[]): EvalContext {
     if (lo > 0) pctFrom52wLow[i] = ((closes[i]! - lo) / lo) * 100;
     if (hi > 0) pctFrom52wHigh[i] = ((closes[i]! - hi) / hi) * 100;
   }
+
+  const { ytdLow, episode: ytdLowTouchEpisode } = ytdLowTouchSeries(
+    dates,
+    lows,
+  );
 
   // Momentum
   const rsi14 = rightAlign(RSI.calculate({ values: closes, period: 14 }), n);
@@ -589,6 +676,8 @@ export function buildEvalContext(prices: PriceRow[]): EvalContext {
   const dema20 = demaSeries(closes, 20);
   const tema20 = temaSeries(closes, 20);
 
+  const sma200FirstTouch = sma200FirstTouchSeries(dates, highs, lows, sma200);
+
   const adx14 = rightAlign(
     ADX.calculate({ high: highs, low: lows, close: closes, period: 14 }).map(
       (a) => (a.adx ?? null) as number | null,
@@ -697,6 +786,7 @@ export function buildEvalContext(prices: PriceRow[]): EvalContext {
 
   return {
     i: n - 1,
+    dates,
     opens,
     highs,
     lows,
@@ -704,6 +794,9 @@ export function buildEvalContext(prices: PriceRow[]): EvalContext {
     volumes,
     pctFrom52wLow,
     pctFrom52wHigh,
+    ytdLow,
+    ytdLowTouchEpisode,
+    sma200FirstTouch,
     rsi14,
     stochK,
     stochD,
