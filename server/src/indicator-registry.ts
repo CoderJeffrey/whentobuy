@@ -491,6 +491,31 @@ const REGISTRY: IndicatorDef[] = [
     },
   },
   {
+    id: "sma200_first_touch",
+    label: "1st Touch of 200 SMA",
+    abbreviation: "~SMA200",
+    category: "trend",
+    description:
+      "First time this year the bar's range comes within 5% of the 200-period SMA — the initial test of long-term support. Fires for 3 bars.",
+    evaluate: (ctx) => {
+      const hit = recentTrue(ctx.sma200FirstTouch, ctx.i, 3);
+      // Guard against the lookback window reaching into the previous year.
+      const fired =
+        hit.fired &&
+        hit.daysAgo != null &&
+        ctx.dates[ctx.i - hit.daysAgo]!.slice(0, 4) ===
+          ctx.dates[ctx.i]!.slice(0, 4);
+      const close = ctx.closes[ctx.i]!;
+      const sma = latest(ctx.sma200, ctx.i);
+      return {
+        triggered: fired,
+        displayValue: fired
+          ? `First touch ${hit.daysAgo === 0 ? "today" : `${hit.daysAgo}d ago`}`
+          : `${pctVs(close, sma)} vs SMA-200`,
+      };
+    },
+  },
+  {
     id: "above_ema_20",
     label: "Above 20 EMA",
     abbreviation: ">EMA20",
@@ -1217,6 +1242,29 @@ const REGISTRY: IndicatorDef[] = [
   },
 
   // ──────────────── Mean reversion / range ────────────────
+  {
+    id: "ytd_low_second_touch",
+    label: "2nd Touch of YTD Low",
+    abbreviation: "YTDLOW2",
+    category: "mean_reversion",
+    description:
+      "The bar's low is within 5% of the year-to-date low on a second or later visit — touch clusters separated by more than 10 calendar days. A retest of the year's low as support.",
+    evaluate: (ctx) => {
+      const episode = latest(ctx.ytdLowTouchEpisode, ctx.i);
+      const low = latest(ctx.ytdLow, ctx.i);
+      const close = ctx.closes[ctx.i]!;
+      const pct = low == null || low <= 0 ? null : ((close - low) / low) * 100;
+      const triggered = episode != null && episode >= 2;
+      return {
+        triggered,
+        displayValue: triggered
+          ? `Retesting YTD low (visit #${episode})`
+          : pct == null
+            ? "YTD low: n/a"
+            : `${fmt(pct, 1)}% above YTD low`,
+      };
+    },
+  },
   {
     id: "near_52w_low",
     label: "Near 52-Week Low",
