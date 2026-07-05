@@ -128,6 +128,75 @@
 .lp .btn-signin .arrow { font-family: var(--lp-mono); font-size: 13px; opacity: 0.5; transition: transform .2s, opacity .2s; }
 .lp .btn-signin:hover .arrow { transform: translateX(2px); opacity: 0.9; }
 
+/* ===== Floating island nav (desktop only) =====
+   Apple Dynamic-Island style: the collapsed pill shows the logo + current
+   section label; hovering (or keyboard focus) morphs it open to the full
+   section menu + sign-in. Expansion is done by animating the 0fr/1fr grid
+   tracks of the two .island-col wrappers. */
+.lp .island-nav {
+  position: fixed; top: 18px; left: 0; right: 0; z-index: 50;
+  display: flex; justify-content: center;
+  pointer-events: none;
+}
+.lp .island {
+  pointer-events: auto;
+  display: flex; align-items: center;
+  padding: 6px;
+  background: linear-gradient(180deg, rgba(32,32,32,0.92), rgba(14,14,14,0.94));
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 999px;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.08) inset, 0 12px 40px -12px rgba(0,0,0,0.8);
+}
+.lp .island-logo { display: grid; place-items: center; padding: 6px 0 6px 8px; }
+.lp .island-col {
+  display: grid;
+  transition: grid-template-columns .5s cubic-bezier(0.34, 1.1, 0.4, 1);
+}
+.lp .island-col > .clip {
+  min-width: 0; overflow: hidden;
+  display: flex; align-items: center;
+  white-space: nowrap;
+  transition: opacity .2s ease;
+}
+.lp .island-state { grid-template-columns: 1fr; }
+.lp .island-menu { grid-template-columns: 0fr; }
+.lp .island-menu > .clip { opacity: 0; }
+/* Delays below = hover intent: expansion waits .3s so grazing the pill
+   doesn't pop it open. They only exist on the hover/focus rules, so
+   collapsing on mouse-out is immediate. */
+.lp .island:hover .island-state,
+.lp .island:focus-within .island-state { grid-template-columns: 0fr; transition-delay: .3s; }
+.lp .island:hover .island-state > .clip,
+.lp .island:focus-within .island-state > .clip { opacity: 0; transition-delay: .3s; }
+.lp .island:hover .island-menu,
+.lp .island:focus-within .island-menu { grid-template-columns: 1fr; transition-delay: .3s; }
+.lp .island:hover .island-menu > .clip,
+.lp .island:focus-within .island-menu > .clip { opacity: 1; transition-delay: .45s; }
+.lp .island-label {
+  padding: 8px 14px 8px 12px;
+  font-size: 14px; font-weight: 500; color: var(--lp-fg);
+}
+.lp .island-menu a {
+  padding: 8px 13px;
+  color: var(--lp-fg-2);
+  border-radius: 999px;
+  font-size: 14px; font-weight: 500;
+  transition: color .2s ease, background .2s ease;
+}
+.lp .island-menu a:hover { color: var(--lp-fg); background: rgba(255,255,255,0.06); }
+.lp .island-menu a.island-signin {
+  margin-left: 8px;
+  padding: 8px 15px;
+  background: linear-gradient(180deg, #ffffff, rgba(255,255,255,0.88));
+  color: #000000; font-weight: 600;
+}
+.lp .island-menu a.island-signin:hover { background: #ffffff; color: #000000; }
+
+@media (min-width: 961px) { .lp .nav-mobile { display: none; } }
+@media (max-width: 960px) { .lp .island-nav { display: none; } }
+
 .lp .btn {
   padding: 8px 14px; border-radius: 6px; font-weight: 500; font-size: 14px;
   transition: all .15s ease; border: 1px solid transparent; display: inline-flex; align-items: center; gap: 8px;

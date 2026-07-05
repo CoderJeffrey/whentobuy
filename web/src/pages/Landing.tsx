@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import "./Landing.css";
@@ -108,13 +108,55 @@ export default function Landing() {
     () => new Set(["rsi_oversold", "above_sma_50"]),
   );
   const [tickerInput, setTickerInput] = useState("");
+  const [activeSection, setActiveSection] = useState("Indicators");
 
   useEffect(() => {
     document.title = "IndicatorHub — Pre-market signals for stocks worth watching";
   }, []);
 
+  // Track which nav section the viewport is in for the island's collapsed
+  // label. Areas that aren't a nav section fall back to "Indicators".
+  useEffect(() => {
+    const sections: Array<[string, string]> = [
+      ["indicators", "Indicators"],
+      ["digest", "Digest"],
+      ["footer", "Privacy"],
+    ];
+    function onScroll() {
+      let label = "Indicators";
+      const probe = window.innerHeight * 0.3;
+      for (const [id, name] of sections) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        const r = el.getBoundingClientRect();
+        if (r.top <= probe && r.bottom > probe) label = name;
+      }
+      // The footer is too short to reach the probe line — treat page bottom
+      // as Privacy so clicking it in the island updates the label.
+      const doc = document.documentElement;
+      if (window.innerHeight + window.scrollY >= doc.scrollHeight - 4) {
+        label = "Privacy";
+      }
+      setActiveSection(label);
+    }
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, []);
+
   function goToApp() {
     navigate(user ? "/dashboard" : "/login");
+  }
+
+  // Island nav clicks scroll smoothly; no id means back to the top.
+  function scrollToSection(e: MouseEvent<HTMLAnchorElement>, id?: string) {
+    e.preventDefault();
+    if (id) document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+    else window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function toggleIndicator(id: string) {
@@ -184,7 +226,44 @@ export default function Landing() {
 
   return (
     <div className="lp">
-      <nav className="nav">
+      {/* Desktop: floating-island nav. Collapsed = logo + current section;
+          hover/focus expands to the full menu. */}
+      <nav className="island-nav" aria-label="Primary">
+        <div className="island">
+          <Link
+            to="/"
+            className="island-logo"
+            aria-label="IndicatorHub — back to top"
+            onClick={(e) => scrollToSection(e)}
+          >
+            <span className="logo-mark">⌁</span>
+          </Link>
+          <div className="island-col island-state" aria-hidden="true">
+            <div className="clip">
+              <span className="island-label">{activeSection}</span>
+            </div>
+          </div>
+          <div className="island-col island-menu">
+            <div className="clip">
+              <a href="#indicators" onClick={(e) => scrollToSection(e, "indicators")}>
+                Indicators
+              </a>
+              <a href="#digest" onClick={(e) => scrollToSection(e, "digest")}>
+                Digest
+              </a>
+              <a href="#footer" onClick={(e) => scrollToSection(e, "footer")}>
+                Privacy
+              </a>
+              <Link to="/login" className="island-signin">
+                Sign in
+              </Link>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      {/* Mobile keeps the original top bar (island is web-only). */}
+      <nav className="nav nav-mobile">
         <div className="nav-inner">
           <Logo />
           <div className="nav-links">
@@ -719,7 +798,7 @@ export default function Landing() {
       </section>
 
       {/* ============ FOOTER ============ */}
-      <footer>
+      <footer id="footer">
         <div className="container">
           <div className="footer-inner">
             <div className="footer-brand">
